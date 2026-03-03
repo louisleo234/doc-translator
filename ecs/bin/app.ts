@@ -37,6 +37,8 @@ const debug = app.node.tryGetContext('debug') || process.env.DEBUG || 'false';
 const cpuArch = app.node.tryGetContext('cpuArch') || process.env.CPU_ARCH || os.arch();
 const useArm64 = cpuArch === 'arm64';
 
+const enableInternalAlb = (app.node.tryGetContext('enableInternalAlb') ?? process.env.ENABLE_INTERNAL_ALB ?? 'false') === 'true';
+
 new DocTranslationStack(app, 'DocTranslationStack', {
   s3Bucket,
   jwtSecret,
@@ -46,6 +48,7 @@ new DocTranslationStack(app, 'DocTranslationStack', {
   logLevel,
   debug,
   useArm64,
+  enableInternalAlb,
   env: {
     region,
     account,

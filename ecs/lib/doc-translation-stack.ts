@@ -27,6 +27,8 @@ export interface DocTranslationStackProps extends cdk.StackProps {
   debug?: string;
   /** Use ARM64 architecture for Fargate tasks and Docker builds (default: false / X86_64) */
   useArm64?: boolean;
+  /** Enable an internal (non-internet-facing) ALB for private access (default: false) */
+  enableInternalAlb?: boolean;
 }
 
 export class DocTranslationStack extends cdk.Stack {
@@ -52,6 +54,10 @@ export class DocTranslationStack extends cdk.Stack {
   public readonly frontendService: ecs.FargateService;
   /** Application Load Balancer */
   public readonly alb: elbv2.ApplicationLoadBalancer;
+  /** Internal ALB security group (created when enableInternalAlb is true) */
+  public readonly internalAlbSg?: ec2.SecurityGroup;
+  /** Internal Application Load Balancer (created when enableInternalAlb is true) */
+  public readonly internalAlb?: elbv2.ApplicationLoadBalancer;
 
   constructor(scope: Construct, id: string, props: DocTranslationStackProps) {
     super(scope, id, props);
@@ -363,5 +369,51 @@ export class DocTranslationStack extends cdk.Stack {
       value: this.ecsSg.securityGroupId,
       exportName: `${projectName}-ecs-sg`,
     });
+
+    // --- Internal ALB for Private Access (optional) ---
+
+    const enableInternalAlb = props.enableInternalAlb ?? false;
+    if (enableInternalAlb) {
+      this.internalAlbSg = new ec2.SecurityGroup(this, 'InternalAlbSg', {
+        vpc: this.vpc,
+        description: 'Internal ALB Security Group',
+      });
+      this.internalAlbSg.addIngressRule(
+        ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
+        ec2.Port.tcp(80),
+        'Allow HTTP from VPC CIDR'
+      );
+
+      this.ecsSg.addIngressRule(this.internalAlbSg, ec2.Port.tcp(8000), 'Allow backend traffic from internal ALB');
+      this.ecsSg.addIngressRule(this.internalAlbSg, ec2.Port.tcp(8080), 'Allow frontend traffic from internal ALB');
+
+      this.internalAlb = new elbv2.ApplicationLoadBalancer(this, 'InternalAlb', {
+        vpc: this.vpc,
+        internetFacing: false,
+        securityGroup: this.internalAlbSg,
+        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      });
+
+      const internalListener = this.internalAlb.addListener('InternalHttpListener', { port: 80 });
+
+      internalListener.addTargets('InternalFrontendTarget', {
+        port: 8080,
+        targets: [this.frontendService],
+        healthCheck: { path: '/' },
+      });
+
+      internalListener.addTargets('InternalBackendTarget', {
+        port: 8000,
+        targets: [this.backendService],
+        priority: 10,
+        conditions: [elbv2.ListenerCondition.pathPatterns(['/api/*'])],
+        healthCheck: { path: '/api/health' },
+      });
+
+      new cdk.CfnOutput(this, 'InternalAlbDnsName', {
+        value: this.internalAlb.loadBalancerDnsName,
+        exportName: `${projectName}-internal-alb-dns`,
+      });
+    }
   }
 }
