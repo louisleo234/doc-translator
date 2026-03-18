@@ -41,6 +41,7 @@ const enableInternalAlb = (app.node.tryGetContext('enableInternalAlb') ?? proces
 
 const vpcCidr = app.node.tryGetContext('vpcCidr') || process.env.VPC_CIDR || '10.0.0.0/16';
 const internalAlbSourceCidr = app.node.tryGetContext('internalAlbSourceCidr') || process.env.INTERNAL_ALB_SOURCE_CIDR || undefined;
+const albSourceCidr = app.node.tryGetContext('albSourceCidr') || process.env.ALB_SOURCE_CIDR || undefined;
 
 // Validate CIDR format
 const CIDR_REGEX = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/;
@@ -57,6 +58,14 @@ if (internalAlbSourceCidr) {
   }
 }
 
+if (albSourceCidr) {
+  for (const cidr of albSourceCidr.split(',').map((c: string) => c.trim()).filter((c: string) => c)) {
+    if (!CIDR_REGEX.test(cidr)) {
+      throw new Error(`Invalid CIDR in albSourceCidr: "${cidr}". Expected CIDR notation (e.g., 203.0.113.0/24).`);
+    }
+  }
+}
+
 new DocTranslationStack(app, 'DocTranslationStack', {
   s3Bucket,
   jwtSecret,
@@ -69,6 +78,7 @@ new DocTranslationStack(app, 'DocTranslationStack', {
   enableInternalAlb,
   vpcCidr,
   internalAlbSourceCidr,
+  albSourceCidr,
   env: {
     region,
     account,
