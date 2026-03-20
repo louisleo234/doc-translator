@@ -26,7 +26,7 @@ export const useJobStore = defineStore('job', () => {
   // Apollo Client freezes query/mutation results to prevent cache corruption,
   // so we need to clone before storing/modifying
   function deepClone<T>(obj: T): T {
-    return structuredClone(obj)
+    return JSON.parse(JSON.stringify(obj))
   }
 
   // Current session state (in-memory)

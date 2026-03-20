@@ -8,13 +8,11 @@ Deploy the Doc Translation System to Amazon ECS Fargate using AWS CDK.
 2. AWS CLI installed and configured
 3. Docker installed and running
 4. AWS CDK CLI (`npm install -g aws-cdk`)
-5. AWS IAM user/role with the following permissions:
-   - Full access to ECS, ECR, VPC, ELB, IAM, CloudFormation
-   - Access to DynamoDB, S3, Bedrock
+5. AWS IAM user/role with permissions for ECS, ECR, VPC, ELB, IAM, CloudFormation, DynamoDB, S3, Bedrock
 6. S3 bucket created for file storage
 7. Bedrock model access enabled in your AWS account (Nova 2 Lite, Claude Sonnet/Haiku)
 
-## Deployment Architecture
+## Architecture
 
 ```
                     ┌─────────────────────────────────────────────────────────┐
@@ -68,20 +66,75 @@ npx cdk bootstrap
 npx cdk deploy
 ```
 
-## Configuration Parameters
+## Configuration
 
-Parameters are provided via CDK context (`-c`) or environment variables. Context takes precedence:
+All parameters can be provided via CDK context (`-c key=value`) or environment variables. Context takes precedence.
 
-| Parameter | Environment Variable | Required | Description |
-|-----------|---------------------|----------|-------------|
-| `s3Bucket` | `S3_BUCKET` | Yes | S3 bucket name for file storage |
-| `jwtSecret` | `JWT_SECRET` | Yes | JWT signing secret |
-| `region` | `CDK_DEFAULT_REGION` | No | AWS region (default: us-west-2) |
-| `cpuArch` | `CPU_ARCH` | No | CPU architecture: `arm64` or `x64` (auto-detected from host) |
-| `enableInternalAlb` | `ENABLE_INTERNAL_ALB` | No | Enable internal ALB for private access (default: `false`) |
-| `vpcCidr` | `VPC_CIDR` | No | VPC CIDR block (default: `10.0.0.0/16`) |
-| `internalAlbSourceCidr` | `INTERNAL_ALB_SOURCE_CIDR` | No | Comma-separated source CIDRs allowed to access the internal ALB on port 80 (default: `0.0.0.0/0`). Multiple CIDRs supported, e.g. `192.168.0.0/16,172.17.0.0/16,10.32.0.0/12`. |
-| - | `CDK_DEFAULT_ACCOUNT` | No | AWS account ID (auto-detected) |
+### Required
+
+| Parameter | Env Variable | Description |
+|-----------|-------------|-------------|
+| `s3Bucket` | `S3_BUCKET` | S3 bucket name for file storage |
+| `jwtSecret` | `JWT_SECRET` | JWT signing secret |
+
+### Optional
+
+| Parameter | Env Variable | Default | Description |
+|-----------|-------------|---------|-------------|
+| `region` | `CDK_DEFAULT_REGION` | `us-west-2` | AWS region |
+| `cpuArch` | `CPU_ARCH` | Auto-detected | CPU architecture: `arm64` or `x64` |
+| `vpcCidr` | `VPC_CIDR` | `10.0.0.0/16` | VPC CIDR block |
+| `albSourceCidr` | `ALB_SOURCE_CIDR` | `0.0.0.0/0` | Comma-separated CIDRs for public ALB access (ports 80/443) |
+| `enableInternalAlb` | `ENABLE_INTERNAL_ALB` | `false` | Enable internal ALB for private access |
+| `internalAlbSourceCidr` | `INTERNAL_ALB_SOURCE_CIDR` | VPC CIDR | Comma-separated CIDRs for internal ALB access (port 80) |
+| - | `CDK_DEFAULT_ACCOUNT` | Auto-detected | AWS account ID |
+
+## Networking
+
+### Restricting Public ALB Access
+
+By default, the internet-facing ALB allows traffic from any IP. Use `albSourceCidr` to restrict:
+
+```bash
+npx cdk deploy -c "albSourceCidr=203.0.113.0/24,198.51.100.0/24"
+```
+
+### Internal ALB
+
+Enable the internal ALB for private access from within the VPC or connected networks (VPN, Direct Connect, VPC Peering, Transit Gateway) without traversing the public internet:
+
+```bash
+# Default: restricts to VPC CIDR
+npx cdk deploy -c enableInternalAlb=true
+
+# Restrict to specific CIDRs
+npx cdk deploy -c enableInternalAlb=true -c internalAlbSourceCidr=172.16.0.0/12
+```
+
+When enabled, this creates:
+- An internal ALB in private subnets with the same routing rules as the public ALB
+- A security group allowing HTTP (port 80) from `internalAlbSourceCidr` (default: VPC CIDR)
+- A CloudFormation output `InternalAlbDnsName` (only resolvable from within the VPC or connected networks)
+
+### Custom VPC CIDR
+
+Override the default VPC CIDR if it conflicts with your existing network:
+
+```bash
+npx cdk deploy -c vpcCidr=172.24.252.0/22
+```
+
+> **Note:** Changing `vpcCidr` on an existing stack replaces the VPC and all dependent resources. This is a destructive change — plan for downtime or deploy a new stack.
+
+### Full Private-Access Example
+
+```bash
+npx cdk deploy \
+  -c enableInternalAlb=true \
+  -c vpcCidr=172.24.252.0/22 \
+  -c "albSourceCidr=203.0.113.0/24" \
+  -c "internalAlbSourceCidr=192.168.0.0/16,172.17.0.0/16,10.13.0.0/16"
+```
 
 ## CDK Commands
 
@@ -92,53 +145,7 @@ npx cdk deploy         # Deploy stack
 npx cdk destroy        # Delete all resources
 ```
 
-## Internal ALB (Optional)
-
-Enable the internal ALB to allow private access from within the VPC or connected networks (VPN, Direct Connect, VPC Peering, Transit Gateway) without traversing the public internet. This also serves as the foundation for AWS PrivateLink if cross-account access is needed later.
-
-```bash
-# Deploy with internal ALB enabled (allows all sources by default)
-npx cdk deploy -c enableInternalAlb=true
-
-# Restrict internal ALB access to a corporate intranet CIDR
-npx cdk deploy -c enableInternalAlb=true -c internalAlbSourceCidr=172.16.0.0/12
-
-# Or via environment variables
-export ENABLE_INTERNAL_ALB=true
-export INTERNAL_ALB_SOURCE_CIDR=172.16.0.0/12
-npx cdk deploy
-```
-
-When enabled, this creates:
-- An internal (non-internet-facing) ALB in private subnets
-- A security group allowing HTTP (port 80) from `internalAlbSourceCidr` (default: `0.0.0.0/0`)
-- The same routing rules as the public ALB (`/` to frontend, `/api/*` to backend)
-- A CloudFormation output `InternalAlbDnsName` with the internal DNS name
-
-The internal ALB DNS name is only resolvable from within the VPC or connected networks.
-
-## Custom VPC CIDR
-
-By default the stack creates a VPC with CIDR `10.0.0.0/16`. If this conflicts with your on-premises or corporate network, override it with `vpcCidr`:
-
-```bash
-# Example: use 172.24.252.0/22 to avoid overlap with corporate intranet
-npx cdk deploy -c vpcCidr=172.24.252.0/22
-
-# Full private-access deployment example (SGP + IDC via TGW/DX)
-# internalAlbSourceCidr: comma-separated list of allowed source CIDRs
-npx cdk deploy \
-  -c enableInternalAlb=true \
-  -c vpcCidr=172.24.252.0/22 \
-  -c "internalAlbSourceCidr=192.168.0.0/16,172.17.0.0/16,172.21.0.0/22,10.13.0.0/16,10.30.0.0/16,10.32.0.0/12,10.49.0.0/16,10.64.0.0/10,10.128.0.0/16" \
-  --profile omsnaliming
-```
-
-> **Note:** Changing `vpcCidr` on an existing stack replaces the VPC and all dependent resources. This is a destructive change — plan for downtime or deploy a new stack.
-
 ## Post-Deployment
-
-### Get Access URL
 
 After deployment, CDK outputs the ALB DNS address:
 
@@ -147,7 +154,7 @@ Outputs:
 DocTranslationStack.AlbDnsName = DocTr-Alb-xxxxx.us-west-2.elb.amazonaws.com
 ```
 
-You can also query via CloudFormation:
+Query via CLI:
 
 ```bash
 aws cloudformation describe-stacks \
@@ -162,27 +169,27 @@ aws cloudformation describe-stacks \
 
 | Service | CPU | Memory | Port | Auto-scaling |
 |---------|-----|--------|------|--------------|
-| Backend | 0.5 vCPU | 1 GB | 8000 | 1-4 instances, CPU 70% |
-| Frontend | 0.25 vCPU | 0.5 GB | 8080 | 1-4 instances, CPU 70% |
+| Backend | 1 vCPU | 2 GB | 8000 | 1-4 instances, CPU 70% |
+| Frontend | 0.5 vCPU | 1 GB | 8080 | 1-4 instances, CPU 70% |
 
 ### Network
 
-- VPC CIDR: configurable via `vpcCidr` (default: `10.0.0.0/16`), 2 availability zones
-- Public subnets: Public ALB
-- Private subnets: ECS tasks (internet access via NAT Gateway), Internal ALB (if enabled)
+- VPC with 2 availability zones, configurable CIDR (default: `10.0.0.0/16`)
+- Public subnets: public ALB
+- Private subnets: ECS tasks (internet via NAT Gateway), internal ALB (if enabled)
 - VPC Gateway Endpoints: S3, DynamoDB (no NAT charges)
 
 ### IAM Permissions
 
-- Execution role: ECR image pull, CloudWatch log writes
-- Task role (Backend only): DynamoDB (`doc_translation_*` tables), Bedrock (InvokeModel/Converse), S3 (configured bucket)
+- **Execution role**: ECR image pull, CloudWatch log writes
+- **Task role** (backend only): DynamoDB (`doc_translation_*` tables), Bedrock (InvokeModel/Converse), S3 (configured bucket)
 
 ### CloudFormation Outputs
 
 | Output | Description |
 |--------|-------------|
 | `AlbDnsName` | Public ALB DNS address |
-| `InternalAlbDnsName` | Internal ALB DNS address (only when `enableInternalAlb` is true) |
+| `InternalAlbDnsName` | Internal ALB DNS address (when `enableInternalAlb` is true) |
 | `ClusterName` | ECS cluster name |
 | `BackendTaskDefinition` | Backend task definition ARN |
 | `PrivateSubnets` | Private subnet ID list |
@@ -208,24 +215,24 @@ aws ecs describe-services \
 
 ### Common Issues
 
-- Task fails to start: Check if Docker image built successfully, view CloudWatch logs
-- Health check fails: Verify container port and health check path are correct (Backend: `/api/health`, Frontend: `/`)
-- Bedrock calls fail: Confirm model access is enabled in the target region
+- **Task fails to start**: Check if Docker image built successfully, view CloudWatch logs
+- **Health check fails**: Verify container port and health check path (Backend: `/api/health`, Frontend: `/`)
+- **Bedrock calls fail**: Confirm model access is enabled in the target region
 
 ## Cost Estimation
 
-| Resource | Configuration | Estimated Monthly Cost |
-|----------|--------------|------------------------|
-| ECS Fargate (Backend) | 0.5 vCPU, 1GB | ~$15 |
-| ECS Fargate (Frontend) | 0.25 vCPU, 0.5GB | ~$8 |
+| Resource | Configuration | Est. Monthly Cost |
+|----------|--------------|-------------------|
+| ECS Fargate (Backend) | 1 vCPU, 2 GB | ~$30 |
+| ECS Fargate (Frontend) | 0.5 vCPU, 1 GB | ~$15 |
 | ALB (public) | Base fee + LCU | ~$20 |
 | ALB (internal, optional) | Base fee + LCU | ~$20 |
 | NAT Gateway | 1 instance | ~$35 |
 | DynamoDB | On-demand capacity | ~$5 |
 | S3 | File storage | ~$1 |
-| **Total** | | **~$84/month** |
+| **Total** | | **~$106/month** |
 
-*Actual costs depend on usage. Bedrock API call costs are additional. Internal ALB adds ~$20/month when enabled.*
+*Actual costs depend on usage. Bedrock API costs are additional. Internal ALB adds ~$20/month when enabled.*
 
 ---
 

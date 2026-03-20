@@ -31,10 +31,14 @@ export interface DocTranslationStackProps extends cdk.StackProps {
   enableInternalAlb?: boolean;
   /** VPC CIDR block (default: "10.0.0.0/16") */
   vpcCidr?: string;
-  /** Comma-separated source CIDRs allowed to access the internal ALB on port 80 (default: "0.0.0.0/0").
-   *  Use a single "0.0.0.0/0" for open access, or list specific CIDRs for stricter control.
+  /** Comma-separated source CIDRs allowed to access the internal ALB on port 80.
+   *  Defaults to the VPC CIDR if not specified.
    *  Example: "192.168.0.0/16,172.17.0.0/16,10.32.0.0/12" */
   internalAlbSourceCidr?: string;
+  /** Comma-separated source CIDRs allowed to access the internet-facing ALB on ports 80 and 443.
+   *  Defaults to 0.0.0.0/0 (anywhere) if not specified.
+   *  Example: "203.0.113.0/24,198.51.100.0/24" */
+  albSourceCidr?: string;
 }
 
 export class DocTranslationStack extends cdk.Stack {
@@ -74,7 +78,6 @@ export class DocTranslationStack extends cdk.Stack {
     const dockerPlatform = useArm64 ? Platform.LINUX_ARM64 : Platform.LINUX_AMD64;
 
     const vpcCidr = props.vpcCidr ?? '10.0.0.0/16';
-    const internalAlbSourceCidr = props.internalAlbSourceCidr ?? '0.0.0.0/0';
 
     // --- VPC and Networking (Requirement 2) ---
     this.vpc = new ec2.Vpc(this, 'Vpc', {
@@ -99,8 +102,14 @@ export class DocTranslationStack extends cdk.Stack {
       vpc: this.vpc,
       description: 'ALB Security Group',
     });
-    this.albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(80), 'Allow HTTP from anywhere');
-    this.albSg.addIngressRule(ec2.Peer.anyIpv4(), ec2.Port.tcp(443), 'Allow HTTPS from anywhere');
+    const albSourceCidrs = props.albSourceCidr
+      ? props.albSourceCidr.split(',').map(c => c.trim()).filter(c => c.length > 0)
+      : ['0.0.0.0/0'];
+    for (const cidr of albSourceCidrs) {
+      const peer = cidr === '0.0.0.0/0' ? ec2.Peer.anyIpv4() : ec2.Peer.ipv4(cidr);
+      this.albSg.addIngressRule(peer, ec2.Port.tcp(80), `Allow HTTP from ${cidr}`);
+      this.albSg.addIngressRule(peer, ec2.Port.tcp(443), `Allow HTTPS from ${cidr}`);
+    }
 
     // ECS Security Group: allows inbound on ports 8000 and 8080 from ALB SG only
     this.ecsSg = new ec2.SecurityGroup(this, 'EcsSg', {
@@ -207,8 +216,8 @@ export class DocTranslationStack extends cdk.Stack {
     });
 
     this.backendTaskDef = new ecs.FargateTaskDefinition(this, 'BackendTaskDef', {
-      cpu: 512,
-      memoryLimitMiB: 1024,
+      cpu: 1024,
+      memoryLimitMiB: 2048,
       executionRole: this.executionRole,
       taskRole: this.taskRole,
       runtimePlatform: {
@@ -262,8 +271,8 @@ export class DocTranslationStack extends cdk.Stack {
     });
 
     const frontendTaskDef = new ecs.FargateTaskDefinition(this, 'FrontendTaskDef', {
-      cpu: 256,
-      memoryLimitMiB: 512,
+      cpu: 512,
+      memoryLimitMiB: 1024,
       executionRole: this.executionRole,
       // No task role for frontend (Requirement 7.6)
       runtimePlatform: {
@@ -307,7 +316,7 @@ export class DocTranslationStack extends cdk.Stack {
     });
 
     // Task 5.2: Create HTTP listener on port 80 with default action forwarding to frontend (Requirements 5.2, 5.4)
-    const listener = this.alb.addListener('HttpListener', { port: 80 });
+    const listener = this.alb.addListener('HttpListener', { port: 80, open: false });
 
     // Default action: forward to frontend target group (port 8080, health check /)
     listener.addTargets('FrontendTarget', {
@@ -387,7 +396,9 @@ export class DocTranslationStack extends cdk.Stack {
         vpc: this.vpc,
         description: 'Internal ALB Security Group',
       });
-      const sourceCidrs = internalAlbSourceCidr.split(',').map(c => c.trim()).filter(c => c.length > 0);
+      const sourceCidrs = props.internalAlbSourceCidr
+        ? props.internalAlbSourceCidr.split(',').map(c => c.trim()).filter(c => c.length > 0)
+        : [this.vpc.vpcCidrBlock];
       for (const cidr of sourceCidrs) {
         const peer = cidr === '0.0.0.0/0' ? ec2.Peer.anyIpv4() : ec2.Peer.ipv4(cidr);
         this.internalAlbSg.addIngressRule(peer, ec2.Port.tcp(80), `Allow HTTP from ${cidr}`);

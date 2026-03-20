@@ -36,11 +36,12 @@ export function useFileDownload() {
       link.download = filename
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
+      setTimeout(() => {
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+      }, 100)
 
       downloads.value.set(key, { filename, isDownloading: false, error: null })
-      errorHandler.showSuccess(`Downloaded ${filename}`)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Download failed'
       downloads.value.set(key, { filename, isDownloading: false, error: errorMessage })
