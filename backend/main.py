@@ -3,7 +3,6 @@
 import os
 import re
 import logging
-import mimetypes
 import secrets
 import tempfile
 from pathlib import Path
@@ -446,41 +445,19 @@ async def download_file(request: Request) -> Response:
         )
 
     try:
-        # Fetch file content from S3 through the storage service
-        file_bytes = await app_context.s3_file_storage.get_output(
+        # Generate a presigned S3 URL for direct browser download
+        presigned_url = await app_context.s3_file_storage.generate_output_download_url(
             user_id=username,
             job_id=job_id,
             filename=filename,
         )
 
-        if file_bytes is None:
-            return JSONResponse(
-                {"error": "File not found"},
-                status_code=404
-            )
+        logger.info(f"Generated download URL: job_id={job_id}, filename={filename}, user={username}")
 
-        logger.info(f"Serving file download: job_id={job_id}, filename={filename}, user={username}")
-
-        # Determine content type from file extension
-        content_type, _ = mimetypes.guess_type(filename)
-        if content_type is None:
-            content_type = "application/octet-stream"
-
-        # Build Content-Disposition with RFC 5987 encoding for non-ASCII filenames
-        from urllib.parse import quote
-        ascii_filename = filename.encode("ascii", errors="replace").decode("ascii")
-        content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{quote(filename)}'
-
-        return Response(
-            content=file_bytes,
-            media_type=content_type,
-            headers={
-                "Content-Disposition": content_disposition,
-            },
-        )
+        return JSONResponse({"url": presigned_url})
 
     except Exception as e:
-        logger.error(f"Error downloading file: {e}", exc_info=True)
+        logger.error(f"Error generating download URL: {e}", exc_info=True)
         return JSONResponse(
             {"error": "File not found or access denied"},
             status_code=404
