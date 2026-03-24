@@ -145,8 +145,7 @@ class TranslationJob:
         completed_at: Timestamp when the job completed (None if not completed)
         language_pair: Language pair used for translation
         file_ids: List of file IDs to be processed
-        auto_append: Whether to append translations to original text (Append Mode)
-        interleaved_mode: Whether to interleave original and translated lines (Interleaved Mode)
+        output_mode: Output mode for translations ("replace", "append", "interleaved")
     """
     id: str = field(default_factory=lambda: str(uuid4()))
     status: JobStatus = JobStatus.PENDING
@@ -160,8 +159,7 @@ class TranslationJob:
     completed_at: Optional[datetime] = None
     language_pair: Optional[LanguagePair] = None
     file_ids: List[str] = field(default_factory=list)
-    auto_append: bool = True
-    interleaved_mode: bool = False
+    output_mode: str = "replace"
     
     def update_progress(self) -> None:
         """

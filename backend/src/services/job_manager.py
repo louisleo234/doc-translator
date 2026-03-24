@@ -30,18 +30,16 @@ class JobManager:
         self,
         file_ids: List[str],
         language_pair: LanguagePair,
-        auto_append: bool = True,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> TranslationJob:
         """
         Create a new translation job.
-        
+
         Args:
             file_ids: List of file IDs to be processed
             language_pair: Language pair to use for translation
-            auto_append: Whether to append translations to original text (True) or replace (False). Defaults to True.
-            interleaved_mode: Whether to interleave original and translated lines (True) or not (False). Defaults to False.
-            
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
+
         Returns:
             The newly created translation job
         """
@@ -50,8 +48,7 @@ class JobManager:
             files_total=len(file_ids),
             language_pair=language_pair,
             file_ids=file_ids,
-            auto_append=auto_append,
-            interleaved_mode=interleaved_mode
+            output_mode=output_mode
         )
         
         await self.job_store.save_job(job)

@@ -13,29 +13,26 @@ from pathlib import Path
 from typing import List, Optional, Any
 
 
-def apply_auto_append(
+def apply_append_mode(
     original_text: str,
     translated_text: str,
-    auto_append: bool
 ) -> str:
     """
-    Apply auto-append logic to determine final output text.
-    
+    Append translated text after original text.
+
+    If texts are equal (after stripping), returns translated text only to avoid duplication.
+
     Args:
         original_text: Original text from document
         translated_text: Translated text
-        auto_append: Whether to append or replace
-        
+
     Returns:
-        Final text to write to document
+        Combined text with original followed by translation
     """
-    if not auto_append:
-        return translated_text
-    
     # If texts are equal (after stripping), no need to append (avoid duplication)
     if original_text.strip() == translated_text.strip():
         return translated_text
-    
+
     # Append translated text to original
     return f"{original_text}\n{translated_text}"
 
@@ -91,33 +88,28 @@ def apply_interleaved_mode(
 def apply_output_mode(
     original_text: str,
     translated_text: str,
-    auto_append: bool,
-    interleaved_mode: bool
+    output_mode: str = "replace"
 ) -> str:
     """
     Apply the appropriate output mode to determine final text.
-    
-    Routes to the appropriate mode handler based on the flags:
-    - Interleaved mode: interleave original and translated lines
-    - Append mode: append translated text after original
-    - Replace mode (default): return translated text only
-    
+
+    Routes to the appropriate mode handler based on the output_mode:
+    - "interleaved": interleave original and translated lines
+    - "append": append translated text after original
+    - "replace" (default): return translated text only
+
     Args:
         original_text: Original text from document
         translated_text: Translated text
-        auto_append: Whether to append translated text after original
-        interleaved_mode: Whether to interleave lines
-        
+        output_mode: One of "replace", "append", "interleaved"
+
     Returns:
         Final text to write to document
-        
-    Requirements:
-        - 4.6: Apply output mode consistently across all document types
     """
-    if interleaved_mode:
+    if output_mode == "interleaved":
         return apply_interleaved_mode(original_text, translated_text)
-    elif auto_append:
-        return apply_auto_append(original_text, translated_text, True)
+    elif output_mode == "append":
+        return apply_append_mode(original_text, translated_text)
     else:
         return translated_text
 
@@ -222,24 +214,22 @@ class DocumentProcessor(ABC):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to document, preserving formatting.
-        
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
-        
+
+        Output modes:
+        - "replace": translated text replaces original (default)
+        - "append": translated text appended after original
+        - "interleaved": original and translated lines interleaved
+
         Args:
             file_path: Path to the original document
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated document should be saved
-            auto_append: Whether to append translation to original text (default: False)
-            interleaved_mode: Whether to interleave original and translated lines (default: False)
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise

@@ -313,7 +313,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=False, interleaved_mode=False
+                output_mode="replace"
             )
 
             assert success is True
@@ -353,7 +353,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=False, interleaved_mode=False
+                output_mode="replace"
             )
 
             assert success is True
@@ -385,7 +385,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=False, interleaved_mode=False
+                output_mode="replace"
             )
 
             assert success is True
@@ -418,7 +418,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=True, interleaved_mode=False
+                output_mode="append"
             )
 
             assert success is True
@@ -451,7 +451,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=False, interleaved_mode=True
+                output_mode="interleaved"
             )
 
             assert success is True
@@ -484,7 +484,7 @@ class TestMarkdownProcessorWriteTranslated:
 
             success = await processor.write_translated(
                 input_path, segments, translations, output_path,
-                auto_append=False, interleaved_mode=False
+                output_mode="replace"
             )
 
             assert success is True

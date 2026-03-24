@@ -210,7 +210,7 @@ class JobRepository:
             "created_at": created_at_str,
             "completed_at": completed_at_str,
             "file_ids": job.file_ids,
-            "auto_append": job.auto_append,
+            "output_mode": job.output_mode,
             "language_pair": language_pair,
         }
 
@@ -301,7 +301,7 @@ class JobRepository:
             completed_at=completed_at,
             language_pair=language_pair,
             file_ids=item.get("file_ids", []),
-            auto_append=item.get("auto_append", True),
+            output_mode=item.get("output_mode", "replace"),
         )
 
     # =========================================================================

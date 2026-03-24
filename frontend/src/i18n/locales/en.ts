@@ -90,7 +90,7 @@ export default {
 
   // Job
   job: {
-    history: 'Recent History',
+    history: 'Translated Files',
     noJobs: 'No completed jobs yet',
     files: 'files',
     failedFiles: 'Failed Files',

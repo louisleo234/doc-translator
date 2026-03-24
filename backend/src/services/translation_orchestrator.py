@@ -527,8 +527,7 @@ class TranslationOrchestrator:
                 segments=segments,
                 translations=translations,
                 output_path=output_path,
-                auto_append=job.auto_append,
-                interleaved_mode=job.interleaved_mode
+                output_mode=job.output_mode
             )
 
             if not write_success:

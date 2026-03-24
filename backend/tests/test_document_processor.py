@@ -18,7 +18,7 @@ from src.services.document_processor import (
     DocumentProcessorFactory,
     apply_interleaved_mode,
     apply_output_mode,
-    apply_auto_append,
+    apply_append_mode,
 )
 from src.services.excel_document_processor import ExcelDocumentProcessor
 
@@ -255,6 +255,34 @@ class TestExcelDocumentProcessor:
             file_path.unlink()
     
     @pytest.mark.asyncio
+    async def test_extract_text_skips_numeric_and_date_cells(self):
+        """Test that non-text cells (numbers, dates, booleans) are skipped."""
+        from datetime import datetime
+
+        processor = ExcelDocumentProcessor()
+
+        with tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False) as f:
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Sheet1"
+            ws['A1'] = "Hello"        # string - should be extracted
+            ws['B1'] = 42             # int - should be skipped
+            ws['C1'] = 3.14           # float - should be skipped
+            ws['A2'] = True           # bool - should be skipped
+            ws['B2'] = datetime(2024, 1, 15)  # datetime - should be skipped
+            ws['C2'] = "World"        # string - should be extracted
+            wb.save(f.name)
+            file_path = Path(f.name)
+
+        try:
+            segments = await processor.extract_text(file_path)
+
+            texts = [s.text for s in segments]
+            assert texts == ["Hello", "World"]
+        finally:
+            file_path.unlink()
+
+    @pytest.mark.asyncio
     async def test_write_translated(self):
         """Test writing translated text back to Excel."""
         processor = ExcelDocumentProcessor()
@@ -279,9 +307,9 @@ class TestExcelDocumentProcessor:
             # Create translations
             translations = ["Xin chào", "Thế giới"]
             
-            # Write translated (with auto_append=False to replace original text)
+            # Write translated (with output_mode="replace" to replace original text)
             success = await processor.write_translated(
-                input_path, segments, translations, output_path, auto_append=False
+                input_path, segments, translations, output_path, output_mode="replace"
             )
             
             assert success is True
@@ -444,132 +472,330 @@ class TestApplyOutputMode:
     """
     
     def test_replace_mode_returns_translated_only(self):
-        """Test replace mode (both flags false) returns translated text only.
-        
+        """Test replace mode returns translated text only.
+
         Validates: Requirements 4.6
         """
         original = "Hello World"
         translated = "Xin chào Thế giới"
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "replace")
+
         assert result == translated
-    
+
     def test_append_mode_appends_translated_after_original(self):
         """Test append mode appends translated text after original.
-        
+
         Validates: Requirements 4.6
         """
         original = "Hello World"
         translated = "Xin chào Thế giới"
-        
-        result = apply_output_mode(original, translated, auto_append=True, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "append")
+
         expected = f"{original}\n{translated}"
         assert result == expected
-    
+
     def test_interleaved_mode_interleaves_lines(self):
         """Test interleaved mode interleaves original and translated lines.
-        
+
         Validates: Requirements 4.6
         """
         original = "Line 1\nLine 2"
         translated = "Dòng 1\nDòng 2"
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=True)
-        
+
+        result = apply_output_mode(original, translated, "interleaved")
+
         expected = "Line 1\nDòng 1\nLine 2\nDòng 2"
         assert result == expected
-    
-    def test_interleaved_mode_takes_precedence_over_append(self):
-        """Test that interleaved mode takes precedence when both flags are true.
-        
-        Note: This scenario should be prevented by validation, but the function
-        handles it by prioritizing interleaved mode.
-        
-        Validates: Requirements 4.6
-        """
-        original = "Line 1\nLine 2"
-        translated = "Dòng 1\nDòng 2"
-        
-        # Even if both flags are true, interleaved mode takes precedence
-        result = apply_output_mode(original, translated, auto_append=True, interleaved_mode=True)
-        
-        expected = "Line 1\nDòng 1\nLine 2\nDòng 2"
-        assert result == expected
-    
+
     def test_replace_mode_with_multiline_text(self):
         """Test replace mode with multi-line text."""
         original = "Line 1\nLine 2\nLine 3"
         translated = "Dòng 1\nDòng 2\nDòng 3"
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "replace")
+
         assert result == translated
-    
+
     def test_append_mode_with_multiline_text(self):
         """Test append mode with multi-line text."""
         original = "Line 1\nLine 2"
         translated = "Dòng 1\nDòng 2"
-        
-        result = apply_output_mode(original, translated, auto_append=True, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "append")
+
         expected = f"{original}\n{translated}"
         assert result == expected
-    
+
     def test_replace_mode_with_empty_translated(self):
         """Test replace mode with empty translated text."""
         original = "Hello World"
         translated = ""
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "replace")
+
         assert result == ""
-    
+
     def test_append_mode_with_equal_texts(self):
         """Test append mode when original and translated are equal (no duplication)."""
         text = "Same text"
-        
-        result = apply_output_mode(text, text, auto_append=True, interleaved_mode=False)
-        
-        # apply_auto_append should avoid duplication when texts are equal
+
+        result = apply_output_mode(text, text, "append")
+
+        # apply_append_mode should avoid duplication when texts are equal
         assert result == text
-    
+
     def test_interleaved_mode_with_equal_texts(self):
         """Test interleaved mode when original and translated are equal (no duplication)."""
         text = "Same text\nOn multiple lines"
-        
-        result = apply_output_mode(text, text, auto_append=False, interleaved_mode=True)
-        
+
+        result = apply_output_mode(text, text, "interleaved")
+
         # apply_interleaved_mode should avoid duplication when texts are equal
         assert result == text
-    
+
     def test_interleaved_mode_with_unequal_line_counts(self):
         """Test interleaved mode handles unequal line counts correctly."""
         original = "Line 1\nLine 2\nLine 3"
         translated = "Dòng 1"
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=True)
-        
+
+        result = apply_output_mode(original, translated, "interleaved")
+
         # Expected: Line 1, Dòng 1, Line 2, Line 3
         expected = "Line 1\nDòng 1\nLine 2\nLine 3"
         assert result == expected
-    
+
     def test_replace_mode_preserves_special_characters(self):
         """Test replace mode preserves special characters in translated text."""
         original = "Hello"
         translated = "Xin chào! 你好 🌍"
-        
-        result = apply_output_mode(original, translated, auto_append=False, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "replace")
+
         assert result == translated
-    
+
     def test_append_mode_preserves_whitespace(self):
         """Test append mode preserves whitespace in both texts."""
         original = "  Hello  "
         translated = "  Xin chào  "
-        
-        result = apply_output_mode(original, translated, auto_append=True, interleaved_mode=False)
-        
+
+        result = apply_output_mode(original, translated, "append")
+
         expected = f"{original}\n{translated}"
         assert result == expected
+
+    def test_unknown_mode_falls_back_to_replace(self):
+        """Test that an unknown output_mode falls back to replace behavior."""
+        original = "Hello World"
+        translated = "Xin chào Thế giới"
+
+        result = apply_output_mode(original, translated, "unknown_mode")
+
+        assert result == translated
+
+    def test_default_mode_is_replace(self):
+        """Test that the default output_mode is replace."""
+        original = "Hello World"
+        translated = "Xin chào Thế giới"
+
+        result = apply_output_mode(original, translated)
+
+        assert result == translated
+
+
+class TestApplyAppendMode:
+    """Tests for the apply_append_mode function."""
+
+    def test_appends_translated_after_original(self):
+        """Test that translated text is appended after original."""
+        original = "Hello"
+        translated = "Xin chào"
+
+        result = apply_append_mode(original, translated)
+
+        assert result == "Hello\nXin chào"
+
+    def test_no_duplication_when_texts_equal(self):
+        """Test that equal texts are not duplicated."""
+        text = "Same text"
+
+        result = apply_append_mode(text, text)
+
+        assert result == text
+
+    def test_no_duplication_when_texts_equal_after_strip(self):
+        """Test that texts equal after stripping are not duplicated."""
+        original = "  Hello  "
+        translated = "Hello"
+
+        result = apply_append_mode(original, translated)
+
+        assert result == translated
+
+    def test_multiline_append(self):
+        """Test append with multiline text."""
+        original = "Line 1\nLine 2"
+        translated = "Dòng 1\nDòng 2"
+
+        result = apply_append_mode(original, translated)
+
+        assert result == "Line 1\nLine 2\nDòng 1\nDòng 2"
+
+
+class TestOutputModeInTranslationJob:
+    """Tests for output_mode field in TranslationJob model."""
+
+    def test_default_output_mode_is_replace(self):
+        """Test that TranslationJob defaults output_mode to 'replace'."""
+        from src.models.job import TranslationJob, JobStatus
+
+        job = TranslationJob(
+            status=JobStatus.PENDING,
+            files_total=1,
+            file_ids=["file-1"]
+        )
+
+        assert job.output_mode == "replace"
+
+    def test_output_mode_set_to_append(self):
+        """Test that output_mode can be set to 'append'."""
+        from src.models.job import TranslationJob, JobStatus
+
+        job = TranslationJob(
+            status=JobStatus.PENDING,
+            files_total=1,
+            file_ids=["file-1"],
+            output_mode="append"
+        )
+
+        assert job.output_mode == "append"
+
+    def test_output_mode_set_to_interleaved(self):
+        """Test that output_mode can be set to 'interleaved'."""
+        from src.models.job import TranslationJob, JobStatus
+
+        job = TranslationJob(
+            status=JobStatus.PENDING,
+            files_total=1,
+            file_ids=["file-1"],
+            output_mode="interleaved"
+        )
+
+        assert job.output_mode == "interleaved"
+
+
+class TestOutputModeInJobManager:
+    """Tests for output_mode propagation through JobManager."""
+
+    @pytest.fixture
+    def job_manager(self):
+        from unittest.mock import AsyncMock, Mock
+        from src.services.job_manager import JobManager
+        mock_store = Mock()
+        mock_store.save_job = AsyncMock()
+        return JobManager(job_store=mock_store)
+
+    @pytest.fixture
+    def language_pair(self):
+        from src.models.job import LanguagePair
+        return LanguagePair(
+            id="zh-vi",
+            source_language="Chinese",
+            target_language="Vietnamese",
+            source_language_code="zh",
+            target_language_code="vi"
+        )
+
+    async def test_create_job_default_output_mode(self, job_manager, language_pair):
+        """Test that create_job defaults output_mode to 'replace'."""
+        job = await job_manager.create_job(["file-1"], language_pair)
+
+        assert job.output_mode == "replace"
+
+    async def test_create_job_with_append_mode(self, job_manager, language_pair):
+        """Test that create_job propagates 'append' output_mode."""
+        job = await job_manager.create_job(
+            ["file-1"], language_pair, output_mode="append"
+        )
+
+        assert job.output_mode == "append"
+
+    async def test_create_job_with_interleaved_mode(self, job_manager, language_pair):
+        """Test that create_job propagates 'interleaved' output_mode."""
+        job = await job_manager.create_job(
+            ["file-1"], language_pair, output_mode="interleaved"
+        )
+
+        assert job.output_mode == "interleaved"
+
+
+class TestOutputModeValidationInResolver:
+    """Tests for output_mode validation in the GraphQL resolver."""
+
+    async def test_invalid_output_mode_raises_validation_error(self):
+        """Test that invalid output_mode raises ValidationError."""
+        from unittest.mock import Mock
+        from src.graphql.resolvers import resolve_create_translation_job
+
+        info = Mock()
+        info.context = {
+            "request": Mock(headers={"Authorization": "Bearer test-token"}),
+            "resolver_context": Mock(),
+            "current_user": Mock(username="testuser"),
+        }
+
+        with pytest.raises(Exception) as exc_info:
+            await resolve_create_translation_job(
+                info=info,
+                file_ids=["file-1"],
+                language_pair_id="lp-1",
+                output_mode="invalid_mode"
+            )
+
+        assert "Invalid output_mode" in str(exc_info.value)
+
+    async def test_empty_string_output_mode_raises_validation_error(self):
+        """Test that empty string output_mode raises ValidationError."""
+        from unittest.mock import Mock
+        from src.graphql.resolvers import resolve_create_translation_job
+
+        info = Mock()
+        info.context = {
+            "request": Mock(headers={"Authorization": "Bearer test-token"}),
+            "resolver_context": Mock(),
+            "current_user": Mock(username="testuser"),
+        }
+
+        with pytest.raises(Exception) as exc_info:
+            await resolve_create_translation_job(
+                info=info,
+                file_ids=["file-1"],
+                language_pair_id="lp-1",
+                output_mode=""
+            )
+
+        assert "Invalid output_mode" in str(exc_info.value)
+
+    async def test_case_sensitive_output_mode_validation(self):
+        """Test that output_mode validation is case-sensitive."""
+        from unittest.mock import Mock
+        from src.graphql.resolvers import resolve_create_translation_job
+
+        info = Mock()
+        info.context = {
+            "request": Mock(headers={"Authorization": "Bearer test-token"}),
+            "resolver_context": Mock(),
+            "current_user": Mock(username="testuser"),
+        }
+
+        for invalid in ["Replace", "APPEND", "Interleaved"]:
+            with pytest.raises(Exception) as exc_info:
+                await resolve_create_translation_job(
+                    info=info,
+                    file_ids=["file-1"],
+                    language_pair_id="lp-1",
+                    output_mode=invalid
+                )
+
+            assert "Invalid output_mode" in str(exc_info.value)

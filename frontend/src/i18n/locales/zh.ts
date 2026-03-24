@@ -90,7 +90,7 @@ export default {
 
   // Job
   job: {
-    history: '历史记录',
+    history: '已翻译文件',
     noJobs: '暂无已完成的任务',
     files: '个文件',
     failedFiles: '失败的文件',

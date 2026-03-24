@@ -59,7 +59,7 @@ class TestJobRepository:
             files_completed=0,
             created_at=datetime(2026, 1, 15, 10, 0, 0, tzinfo=timezone.utc),
             file_ids=["file-1", "file-2"],
-            auto_append=True,
+            output_mode="append",
             language_pair=LanguagePair(
                 id="lp-1",
                 source_language="Chinese",
@@ -125,7 +125,7 @@ class TestJobRepository:
             "created_at": "2026-01-15T10:00:00+00:00",
             "completed_at": None,
             "file_ids": ["file-1", "file-2"],
-            "auto_append": True,
+            "output_mode": "append",
             "language_pair": {
                 "id": "lp-1",
                 "source_language": "Chinese",
@@ -155,7 +155,7 @@ class TestJobRepository:
         assert item["files_failed"] == []
         assert item["completed_files"] == []
         assert item["file_ids"] == ["file-1", "file-2"]
-        assert item["auto_append"] is True
+        assert item["output_mode"] == "append"
         assert item["language_pair"]["id"] == "lp-1"
 
     def test_serialize_job_with_progress(self, repository, sample_job_with_progress):
@@ -212,7 +212,7 @@ class TestJobRepository:
             "completed_files": [],
             "created_at": "2026-01-15T10:00:00+00:00",
             "file_ids": [],
-            "auto_append": True,
+            "output_mode": "append",
         }
 
         job = repository._deserialize_job(item)

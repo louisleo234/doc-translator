@@ -8,17 +8,14 @@ while preserving formatting during translation writing.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Any
+from typing import List, Optional
 import asyncio
 
 from pptx import Presentation
 from pptx.util import Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE_TYPE
-from pptx.shapes.base import BaseShape
-from pptx.shapes.autoshape import Shape
-from pptx.shapes.placeholder import PlaceholderPicture
-from pptx.table import Table, _Cell
+from pptx.table import Table
 
 from .document_processor import (
     DocumentProcessor,
@@ -143,7 +140,16 @@ class PowerPointProcessor(DocumentProcessor):
                 segments.extend(table_segments)
                 segment_id += len(table_segments)
                 continue
-            
+
+            # Handle charts
+            if shape.has_chart:
+                chart_segments = self._extract_chart_segments(
+                    shape.chart, slide_idx, shape_idx, segment_id
+                )
+                segments.extend(chart_segments)
+                segment_id += len(chart_segments)
+                continue
+
             # Handle shapes with text frames
             if shape.has_text_frame:
                 text_frame = shape.text_frame
@@ -165,18 +171,54 @@ class PowerPointProcessor(DocumentProcessor):
         group_idx: int,
         start_segment_id: int
     ) -> List[TextSegment]:
-        """Extract text segments from a group of shapes."""
+        """Extract text segments from a group of shapes, including nested groups, tables, and charts."""
         segments = []
         segment_id = start_segment_id
-        
+
         for shape_idx, shape in enumerate(group_shape.shapes):
+            # Handle nested groups recursively
+            if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
+                nested_segments = self._extract_group_shape_segments(
+                    shape, slide_idx, group_idx, segment_id
+                )
+                # Tag nested segments with the outer group context
+                for seg in nested_segments:
+                    seg.metadata["nested_group_idx"] = shape_idx
+                segments.extend(nested_segments)
+                segment_id += len(nested_segments)
+                continue
+
+            # Handle tables within groups
+            if shape.has_table:
+                table_segments = self._extract_table_segments(
+                    shape.table, slide_idx, shape_idx, segment_id
+                )
+                # Tag with group context
+                for seg in table_segments:
+                    seg.metadata["group_idx"] = group_idx
+                    seg.metadata["type"] = "group_table_cell"
+                segments.extend(table_segments)
+                segment_id += len(table_segments)
+                continue
+
+            # Handle charts within groups
+            if shape.has_chart:
+                chart_segments = self._extract_chart_segments(
+                    shape.chart, slide_idx, shape_idx, segment_id
+                )
+                for seg in chart_segments:
+                    seg.metadata["group_idx"] = group_idx
+                segments.extend(chart_segments)
+                segment_id += len(chart_segments)
+                continue
+
             if shape.has_text_frame:
                 text_frame = shape.text_frame
                 for para_idx, paragraph in enumerate(text_frame.paragraphs):
                     para_text = paragraph.text.strip()
                     if para_text:
                         runs_metadata = self._get_runs_metadata(paragraph)
-                        
+
                         segment = TextSegment(
                             id=str(segment_id),
                             text=para_text,
@@ -192,7 +234,7 @@ class PowerPointProcessor(DocumentProcessor):
                         )
                         segments.append(segment)
                         segment_id += 1
-        
+
         return segments
     
     def _create_shape_segment(
@@ -306,6 +348,97 @@ class PowerPointProcessor(DocumentProcessor):
         
         return segments
     
+    def _extract_chart_segments(
+        self,
+        chart,
+        slide_idx: int,
+        shape_idx: int,
+        start_segment_id: int
+    ) -> List[TextSegment]:
+        """Extract translatable text segments from a chart (title, axis titles)."""
+        segments = []
+        segment_id = start_segment_id
+
+        # Chart title
+        if chart.has_title and chart.chart_title.has_text_frame:
+            title_text = chart.chart_title.text_frame.text.strip()
+            if title_text:
+                for para_idx, para in enumerate(chart.chart_title.text_frame.paragraphs):
+                    para_text = para.text.strip()
+                    if para_text:
+                        runs_metadata = self._get_runs_metadata(para)
+                        segment = TextSegment(
+                            id=str(segment_id),
+                            text=para_text,
+                            location=f"Slide {slide_idx + 1}, Chart {shape_idx + 1}, Title, Paragraph {para_idx + 1}",
+                            metadata={
+                                "type": "chart",
+                                "chart_element": "title",
+                                "slide_idx": slide_idx,
+                                "shape_idx": shape_idx,
+                                "paragraph_idx": para_idx,
+                                "runs": runs_metadata,
+                            }
+                        )
+                        segments.append(segment)
+                        segment_id += 1
+
+        # Category axis title
+        try:
+            if chart.category_axis.has_title:
+                axis_title = chart.category_axis.axis_title
+                if axis_title.has_text_frame:
+                    for para_idx, para in enumerate(axis_title.text_frame.paragraphs):
+                        para_text = para.text.strip()
+                        if para_text:
+                            runs_metadata = self._get_runs_metadata(para)
+                            segment = TextSegment(
+                                id=str(segment_id),
+                                text=para_text,
+                                location=f"Slide {slide_idx + 1}, Chart {shape_idx + 1}, Category Axis Title, Paragraph {para_idx + 1}",
+                                metadata={
+                                    "type": "chart",
+                                    "chart_element": "category_axis_title",
+                                    "slide_idx": slide_idx,
+                                    "shape_idx": shape_idx,
+                                    "paragraph_idx": para_idx,
+                                    "runs": runs_metadata,
+                                }
+                            )
+                            segments.append(segment)
+                            segment_id += 1
+        except (ValueError, AttributeError):
+            pass
+
+        # Value axis title
+        try:
+            if chart.value_axis.has_title:
+                axis_title = chart.value_axis.axis_title
+                if axis_title.has_text_frame:
+                    for para_idx, para in enumerate(axis_title.text_frame.paragraphs):
+                        para_text = para.text.strip()
+                        if para_text:
+                            runs_metadata = self._get_runs_metadata(para)
+                            segment = TextSegment(
+                                id=str(segment_id),
+                                text=para_text,
+                                location=f"Slide {slide_idx + 1}, Chart {shape_idx + 1}, Value Axis Title, Paragraph {para_idx + 1}",
+                                metadata={
+                                    "type": "chart",
+                                    "chart_element": "value_axis_title",
+                                    "slide_idx": slide_idx,
+                                    "shape_idx": shape_idx,
+                                    "paragraph_idx": para_idx,
+                                    "runs": runs_metadata,
+                                }
+                            )
+                            segments.append(segment)
+                            segment_id += 1
+        except (ValueError, AttributeError):
+            pass
+
+        return segments
+
     def _extract_notes_segments(
         self,
         slide,
@@ -351,31 +484,17 @@ class PowerPointProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to PowerPoint presentation, preserving formatting.
-        
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
-        
-        Preserves:
-        - Font properties (name, size, color, bold, italic, underline)
-        - Shape properties and positions
-        - Slide layouts and themes
-        - Animations and transitions
-        - Embedded media
-        
+
         Args:
             file_path: Path to the original PowerPoint file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated presentation should be saved
-            auto_append: Whether to append translation to original text (default: False)
-            interleaved_mode: Whether to interleave original and translated lines (default: False)
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise
@@ -389,7 +508,7 @@ class PowerPointProcessor(DocumentProcessor):
             # Create translation map with output mode applied
             translation_map = {}
             for seg, trans in zip(segments, translations):
-                final_text = apply_output_mode(seg.text, trans, auto_append, interleaved_mode)
+                final_text = apply_output_mode(seg.text, trans, output_mode)
                 translation_map[seg.id] = final_text
             
             # Process each segment
@@ -409,6 +528,14 @@ class PowerPointProcessor(DocumentProcessor):
                         presentation, segment, translation
                     )
                 elif seg_type == "table_cell":
+                    await self._write_table_cell_translation(
+                        presentation, segment, translation
+                    )
+                elif seg_type == "chart":
+                    await self._write_chart_translation(
+                        presentation, segment, translation
+                    )
+                elif seg_type == "group_table_cell":
                     await self._write_table_cell_translation(
                         presentation, segment, translation
                     )
@@ -450,13 +577,17 @@ class PowerPointProcessor(DocumentProcessor):
             return
         
         slide = presentation.slides[slide_idx]
-        shapes_with_text = [s for s in slide.shapes if s.has_text_frame]
-        
-        if shape_idx >= len(shapes_with_text):
+        shapes = list(slide.shapes)
+
+        if shape_idx >= len(shapes):
             self.logger.warning(f"Shape index {shape_idx} out of range on slide {slide_idx}")
             return
-        
-        shape = shapes_with_text[shape_idx]
+
+        shape = shapes[shape_idx]
+        if not shape.has_text_frame:
+            self.logger.warning(f"Shape {shape_idx} on slide {slide_idx} has no text frame")
+            return
+
         text_frame = shape.text_frame
         
         if para_idx >= len(text_frame.paragraphs):
@@ -485,22 +616,26 @@ class PowerPointProcessor(DocumentProcessor):
             return
         
         slide = presentation.slides[slide_idx]
-        
-        # Find group shapes
-        group_shapes = [s for s in slide.shapes if s.shape_type == MSO_SHAPE_TYPE.GROUP]
-        
-        if group_idx >= len(group_shapes):
+        shapes = list(slide.shapes)
+
+        if group_idx >= len(shapes):
             self.logger.warning(f"Group index {group_idx} out of range on slide {slide_idx}")
             return
-        
-        group_shape = group_shapes[group_idx]
-        shapes_with_text = [s for s in group_shape.shapes if s.has_text_frame]
-        
-        if shape_idx >= len(shapes_with_text):
+
+        group_shape = shapes[group_idx]
+        if group_shape.shape_type != MSO_SHAPE_TYPE.GROUP:
+            self.logger.warning(f"Shape {group_idx} on slide {slide_idx} is not a group")
+            return
+
+        inner_shapes = list(group_shape.shapes)
+        if shape_idx >= len(inner_shapes):
             self.logger.warning(f"Shape index {shape_idx} out of range in group {group_idx}")
             return
-        
-        shape = shapes_with_text[shape_idx]
+
+        shape = inner_shapes[shape_idx]
+        if not shape.has_text_frame:
+            self.logger.warning(f"Shape {shape_idx} in group {group_idx} has no text frame")
+            return
         text_frame = shape.text_frame
         
         if para_idx >= len(text_frame.paragraphs):
@@ -529,15 +664,18 @@ class PowerPointProcessor(DocumentProcessor):
             return
         
         slide = presentation.slides[slide_idx]
-        
-        # Find table shapes
-        table_shapes = [s for s in slide.shapes if s.has_table]
-        
-        if shape_idx >= len(table_shapes):
+        shapes = list(slide.shapes)
+
+        if shape_idx >= len(shapes):
             self.logger.warning(f"Table shape index {shape_idx} out of range on slide {slide_idx}")
             return
-        
-        table = table_shapes[shape_idx].table
+
+        shape = shapes[shape_idx]
+        if not shape.has_table:
+            self.logger.warning(f"Shape {shape_idx} on slide {slide_idx} is not a table")
+            return
+
+        table = shape.table
         
         if row_idx >= len(table.rows):
             self.logger.warning(f"Row index {row_idx} out of range in table")
@@ -598,6 +736,68 @@ class PowerPointProcessor(DocumentProcessor):
         paragraph = notes_text_frame.paragraphs[para_idx]
         runs_meta = segment.metadata.get("runs", [])
         
+        self._update_paragraph_text(paragraph, translation, runs_meta)
+
+    async def _write_chart_translation(
+        self,
+        presentation: Presentation,
+        segment: TextSegment,
+        translation: str
+    ) -> None:
+        """Write translation to a chart element (title or axis title)."""
+        slide_idx = segment.metadata.get("slide_idx", 0)
+        shape_idx = segment.metadata.get("shape_idx", 0)
+        chart_element = segment.metadata.get("chart_element", "")
+        para_idx = segment.metadata.get("paragraph_idx", 0)
+
+        if slide_idx >= len(presentation.slides):
+            self.logger.warning(f"Slide index {slide_idx} out of range")
+            return
+
+        slide = presentation.slides[slide_idx]
+        shapes = list(slide.shapes)
+
+        if shape_idx >= len(shapes):
+            self.logger.warning(f"Shape index {shape_idx} out of range on slide {slide_idx}")
+            return
+
+        shape = shapes[shape_idx]
+        if not shape.has_chart:
+            self.logger.warning(f"Shape {shape_idx} on slide {slide_idx} is not a chart")
+            return
+
+        chart = shape.chart
+        text_frame = None
+
+        if chart_element == "title" and chart.has_title and chart.chart_title.has_text_frame:
+            text_frame = chart.chart_title.text_frame
+        elif chart_element == "category_axis_title":
+            try:
+                if chart.category_axis.has_title:
+                    axis_title = chart.category_axis.axis_title
+                    if axis_title.has_text_frame:
+                        text_frame = axis_title.text_frame
+            except (ValueError, AttributeError):
+                pass
+        elif chart_element == "value_axis_title":
+            try:
+                if chart.value_axis.has_title:
+                    axis_title = chart.value_axis.axis_title
+                    if axis_title.has_text_frame:
+                        text_frame = axis_title.text_frame
+            except (ValueError, AttributeError):
+                pass
+
+        if text_frame is None:
+            self.logger.warning(f"Chart element '{chart_element}' not found on slide {slide_idx}")
+            return
+
+        if para_idx >= len(text_frame.paragraphs):
+            self.logger.warning(f"Paragraph index {para_idx} out of range in chart element")
+            return
+
+        paragraph = text_frame.paragraphs[para_idx]
+        runs_meta = segment.metadata.get("runs", [])
         self._update_paragraph_text(paragraph, translation, runs_meta)
 
     def _update_paragraph_text(
@@ -722,6 +922,9 @@ class PowerPointProcessor(DocumentProcessor):
                                 has_content = True
                                 break
                     if shape.has_table:
+                        has_content = True
+                        break
+                    if shape.has_chart:
                         has_content = True
                         break
                     if has_content:

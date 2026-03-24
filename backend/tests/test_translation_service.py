@@ -65,9 +65,10 @@ class TestSystemPromptConstruction:
         
         # Verify language detection rule is present
         assert "LANGUAGE DETECTION" in prompt
-        assert "Automatically detect" in prompt
+        assert "Translate all" in prompt
         assert "Chinese" in prompt
         assert "return it unchanged" in prompt.lower()
+        assert "when in doubt, translate" in prompt.lower()
     
     def test_system_prompt_contains_english_preservation_rules(
         self,
@@ -96,7 +97,8 @@ class TestSystemPromptConstruction:
         
         # Verify mixed content rule is present
         assert "MIXED CONTENT" in prompt
-        assert "translate only" in prompt.lower()
+        assert "translate the" in prompt.lower()
+        assert "Do NOT skip" in prompt
     
     def test_system_prompt_contains_output_format_rules(
         self,

@@ -134,7 +134,7 @@
 
         <!-- Completed Jobs Section -->
         <a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
-          <a-card :bordered="false" title="Recent History" class="section-card glass-card history-card">
+          <a-card :bordered="false" class="section-card glass-card history-card">
              <template #title>
               <div class="card-header">
                 <HistoryOutlined class="header-icon" />
@@ -155,7 +155,12 @@
                              <a-tag :color="getStatusColor(item.status)" class="status-tag">
                                 {{ item.status }}
                              </a-tag>
-                             <span class="job-id">#{{ item.id }}</span>
+                             <span v-if="item.languagePair" class="job-lang-pair">
+                                {{ item.languagePair.sourceLanguage }} → {{ item.languagePair.targetLanguage }}
+                             </span>
+                             <a-tag v-if="item.outputMode" class="output-mode-tag">
+                                {{ t(`outputMode.${item.outputMode}`) }}
+                             </a-tag>
                              <span class="job-date">{{ formatDate(item.createdAt) }}</span>
                         </div>
                          <div class="job-stats">
@@ -299,10 +304,6 @@ const selectedLanguagePair = ref<LanguagePair | null>(null)
 const selectedCatalogIds = ref<string[]>([])
 const outputMode = ref<OutputMode>('replace')
 
-// Computed properties for GraphQL mutation
-const autoAppend = computed(() => outputMode.value === 'append')
-const interleavedMode = computed(() => outputMode.value === 'interleaved')
-
 // Computed
 const currentJob = computed(() => jobStore.currentJob)
 const completedJobs = computed(() => jobStore.completedJobs)
@@ -386,8 +387,7 @@ async function handleStartTranslation() {
         fileIds,
         languagePairId: selectedLanguagePairId.value,
         catalogIds: selectedCatalogIds.value.length > 0 ? selectedCatalogIds.value : undefined,
-        autoAppend: autoAppend.value,
-        interleavedMode: interleavedMode.value,
+        outputMode: outputMode.value,
       })
 
       if (result?.data?.createTranslationJob) {
@@ -711,13 +711,15 @@ function getDocumentIconColor(documentType?: DocumentType): string {
   border: none;
 }
 
-.job-id {
-  font-family: monospace;
-  color: var(--text-secondary);
-  font-size: 14px;
-  background: rgba(0,0,0,0.03);
-  padding: 2px 6px;
+.output-mode-tag {
+  font-size: 12px;
   border-radius: 4px;
+}
+
+.job-lang-pair {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-color);
 }
 
 .job-date {

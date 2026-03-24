@@ -125,9 +125,12 @@ class ExcelProcessor:
                     if has_formula:
                         self.logger.debug(f"Skipping formula cell at {worksheet_name}!{cell.coordinate}")
                         continue
-                    
-                    # Convert value to string for processing
-                    cell_text = str(cell.value) if cell.value is not None else ""
+
+                    # Skip non-text cells (numbers, dates, booleans)
+                    if not isinstance(cell.value, str):
+                        continue
+
+                    cell_text = cell.value
                     
                     # Skip cells with only whitespace
                     if not cell_text.strip():

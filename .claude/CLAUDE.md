@@ -97,8 +97,8 @@ On first run, the backend auto-creates a default admin user if none exists. A ra
 
 **Output Modes** (mutually exclusive, configured per job):
 - **Replace** (default): Translated text replaces original
-- **Append** (`auto_append=True`): Translation appended after original text
-- **Interleaved** (`interleaved_mode=True`): Original and translated lines alternated
+- **Append** : Translation appended after original text
+- **Interleaved** : Original and translated lines alternated
 
 **Dual Job Storage**: Active jobs in `JobStore` (in-memory) for fast access; persisted to `JobRepository` (DynamoDB) after each status change.
 
@@ -149,7 +149,7 @@ Required in `backend/.env`:
 
 Optional:
 - `MAX_CONCURRENT_FILES` (default: 5)
-- `TRANSLATION_BATCH_SIZE` (default: 10)
+- `TRANSLATION_BATCH_SIZE` (default: 20)
 - `MAX_FILE_SIZE` (default: 52428800 / 50MB)
 - `FRONTEND_URL` - For CORS (default: `http://localhost:3000`)
 - `HOST` / `PORT` (default: `0.0.0.0` / `8000`)

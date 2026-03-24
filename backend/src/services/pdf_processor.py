@@ -197,30 +197,17 @@ class PDFProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to PDF document, preserving formatting.
-        
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
-        
-        Strategy:
-        1. For each text segment, redact (white out) the original text area
-        2. Insert the translated text at the same position
-        3. Match font size and color where possible
-        4. Preserve all images and vector graphics
-        
+
         Args:
             file_path: Path to the original PDF file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated document should be saved
-            auto_append: Whether to append translation to original text (default: False)
-            interleaved_mode: Whether to interleave original and translated lines (default: False)
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise
@@ -234,7 +221,7 @@ class PDFProcessor(DocumentProcessor):
             # Create translation map with output mode applied
             translation_map = {}
             for seg, trans in zip(segments, translations):
-                final_text = apply_output_mode(seg.text, trans, auto_append, interleaved_mode)
+                final_text = apply_output_mode(seg.text, trans, output_mode)
                 translation_map[seg.id] = final_text
             
             # Group segments by page for efficient processing

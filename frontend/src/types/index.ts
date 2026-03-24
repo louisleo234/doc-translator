@@ -150,8 +150,8 @@ export interface TranslationJob {
   filesProcessing: FileProgress[]
   filesFailed: FileError[]
   completedFiles: CompletedFile[]
-  autoAppend?: boolean
-  interleavedMode?: boolean  // NEW field for interleaved output mode
+  languagePair?: { sourceLanguage: string; targetLanguage: string }
+  outputMode?: OutputMode
   createdAt: string
   completedAt?: string
 }

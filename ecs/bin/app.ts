@@ -27,7 +27,7 @@ const account = process.env.CDK_DEFAULT_ACCOUNT;
 
 // Optional tunable configs: CDK context > env var > hardcoded default
 const maxConcurrentFiles = app.node.tryGetContext('maxConcurrentFiles') || process.env.MAX_CONCURRENT_FILES || '5';
-const translationBatchSize = app.node.tryGetContext('translationBatchSize') || process.env.TRANSLATION_BATCH_SIZE || '10';
+const translationBatchSize = app.node.tryGetContext('translationBatchSize') || process.env.TRANSLATION_BATCH_SIZE || '20';
 const maxFileSize = app.node.tryGetContext('maxFileSize') || process.env.MAX_FILE_SIZE || '52428800';
 const logLevel = app.node.tryGetContext('logLevel') || process.env.LOG_LEVEL || 'INFO';
 const debug = app.node.tryGetContext('debug') || process.env.DEBUG || 'false';

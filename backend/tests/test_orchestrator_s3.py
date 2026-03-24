@@ -146,7 +146,7 @@ class MockDocumentProcessor:
     def generate_output_filename(self, original_path: Path, target_lang_code: str):
         return f"{original_path.stem}_{target_lang_code}{original_path.suffix}"
     
-    async def write_translated(self, file_path, segments, translations, output_path, auto_append=False, interleaved_mode=False):
+    async def write_translated(self, file_path, segments, translations, output_path, output_mode="replace"):
         # Write some content to the output file
         output_path.write_bytes(b"translated content")
         return self._write_success

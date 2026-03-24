@@ -99,24 +99,17 @@ class ExcelDocumentProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to Excel document, preserving formatting.
-        
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
-        
+
         Args:
             file_path: Path to the original Excel file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated document should be saved
-            auto_append: Whether to append translation to original text (default: False)
-            interleaved_mode: Whether to interleave original and translated lines (default: False)
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise
@@ -146,7 +139,7 @@ class ExcelDocumentProcessor(DocumentProcessor):
                         key = (worksheet.title, cell.row, cell.column)
                         if key in translation_map:
                             original_text, translated_text = translation_map[key]
-                            final_text = apply_output_mode(original_text, translated_text, auto_append, interleaved_mode)
+                            final_text = apply_output_mode(original_text, translated_text, output_mode)
                             await self._excel_processor.update_cell(
                                 cell, 
                                 final_text

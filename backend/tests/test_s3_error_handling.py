@@ -688,7 +688,7 @@ class TestOrchestratorS3ErrorHandling:
             def generate_output_filename(self, original_path, target_lang_code):
                 return f"{original_path.stem}_{target_lang_code}{original_path.suffix}"
             
-            async def write_translated(self, file_path, segments, translations, output_path, auto_append=False, interleaved_mode=False):
+            async def write_translated(self, file_path, segments, translations, output_path, output_mode="replace"):
                 output_path.write_bytes(b"translated content")
                 return True
         

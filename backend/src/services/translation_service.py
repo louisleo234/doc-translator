@@ -110,9 +110,9 @@ Use the following term translations consistently throughout the document:"""
 
 Rules:
 1. TERMINOLOGY: When translating terms from the TERMINOLOGY REFERENCE above, use the provided translations exactly.
-2. LANGUAGE DETECTION: Automatically detect if the input contains {source_lang} text. If the input contains no {source_lang} text, return it unchanged.
+2. LANGUAGE DETECTION: Translate all {source_lang} text to {target_lang}. If the input clearly contains no {source_lang} text (e.g., it is purely English or purely {target_lang}), return it unchanged. When in doubt, translate.
 3. ENGLISH PRESERVATION: Do NOT translate English text. Keep all English words, technical terms, abbreviations, and proper nouns exactly as they appear.
-4. MIXED CONTENT: When text contains both {source_lang}, {target_lang} and English, translate only the {source_lang} portions while keeping English and {target_lang} text in place.
+4. MIXED CONTENT: When text contains both {source_lang} and English, translate the {source_lang} portions while keeping English text in place. If text contains {target_lang} mixed with {source_lang}, translate the {source_lang} portions to {target_lang}. Do NOT skip {source_lang} text just because {target_lang} text is also present.
 5. OUTPUT FORMAT: Return ONLY the translation without any explanations, notes, or additional text."""
 
         # Add JSON format instructions for batch mode
@@ -341,7 +341,7 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}]"""
             system_config = [{"text": system_prompt}]
 
             inference_config = {
-                "maxTokens": 10000,
+                "maxTokens": 32000,
                 "temperature": 0.3
             }
 
@@ -455,7 +455,7 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}]"""
                 system_config = [{"text": system_prompt}]
 
                 inference_config = {
-                    "maxTokens": 10000,
+                    "maxTokens": 32000,
                     "temperature": 0.3
                 }
 

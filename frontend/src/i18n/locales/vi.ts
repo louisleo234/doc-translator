@@ -90,7 +90,7 @@ export default {
 
   // Job
   job: {
-    history: 'Lịch sử',
+    history: 'Tệp đã dịch',
     noJobs: 'Chưa có công việc hoàn thành',
     files: 'tệp',
     failedFiles: 'Tệp thất bại',

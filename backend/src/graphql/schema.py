@@ -256,8 +256,7 @@ class TranslationJob:
         created_at: Timestamp when the job was created
         completed_at: Timestamp when the job completed (None if not completed)
         language_pair: Language pair used for translation
-        auto_append: Whether translations are appended to original text (True) or replace it (False)
-        interleaved_mode: Whether original and translated lines are interleaved line by line (True) or not (False)
+        output_mode: Output mode for translations ("replace", "append", "interleaved")
     """
     id: str
     status: JobStatus
@@ -270,8 +269,7 @@ class TranslationJob:
     created_at: datetime
     completed_at: Optional[datetime]
     language_pair: Optional[LanguagePair]
-    auto_append: bool
-    interleaved_mode: bool
+    output_mode: str
 
 
 @strawberry.type
@@ -730,33 +728,26 @@ class Mutation:
         file_ids: List[str],
         language_pair_id: str,
         catalog_ids: Optional[List[str]] = None,
-        auto_append: bool = True,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> TranslationJob:
         """
         Create a new translation job with optional catalog selection.
-        
+
         Args:
             file_ids: List of file IDs to translate
             language_pair_id: ID of the language pair to use
             catalog_ids: Optional list of catalog IDs for term injection (in priority order)
-            auto_append: Whether to append translations to original text (True) or replace (False). Defaults to True.
-            interleaved_mode: Whether to interleave original and translated lines (True) or not (False). Defaults to False.
-            
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
+
         Returns:
             TranslationJob: The created job
-            
+
         Raises:
             AuthenticationError: If the user is not authenticated
             ValidationError: If file_ids or language_pair_id are invalid
-            ValueError: If both auto_append and interleaved_mode are True (mutually exclusive)
         """
-        # Validate mutual exclusivity of output modes
-        if auto_append and interleaved_mode:
-            raise ValueError("Cannot enable both Append Mode and Interleaved Mode simultaneously")
-        
         from .resolvers import resolve_create_translation_job
-        return await resolve_create_translation_job(info, file_ids, language_pair_id, catalog_ids, auto_append, interleaved_mode)
+        return await resolve_create_translation_job(info, file_ids, language_pair_id, catalog_ids, output_mode)
     
     @strawberry.mutation
     async def add_language_pair(

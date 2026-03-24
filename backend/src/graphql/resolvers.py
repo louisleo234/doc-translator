@@ -241,8 +241,7 @@ def convert_translation_job(job: TranslationJob) -> GQLTranslationJob:
         created_at=job.created_at,
         completed_at=job.completed_at,
         language_pair=convert_language_pair_for_gql(job.language_pair) if job.language_pair else None,
-        auto_append=job.auto_append,
-        interleaved_mode=job.interleaved_mode
+        output_mode=job.output_mode
     )
 
 
@@ -538,8 +537,7 @@ async def resolve_create_translation_job(
     file_ids: List[str],
     language_pair_id: str,
     catalog_ids: Optional[List[str]] = None,
-    auto_append: bool = True,
-    interleaved_mode: bool = False
+    output_mode: str = "replace"
 ) -> GQLTranslationJob:
     """
     Create a new translation job with optional catalog selection.
@@ -549,8 +547,7 @@ async def resolve_create_translation_job(
         file_ids: List of file IDs to translate
         language_pair_id: ID of language pair to use
         catalog_ids: Optional list of catalog IDs for term injection (in priority order)
-        auto_append: Whether to append translations to original text (True) or replace (False). Defaults to True.
-        interleaved_mode: Whether to interleave original and translated lines (True) or not (False). Defaults to False.
+        output_mode: One of "replace", "append", "interleaved" (default: "replace")
 
     Returns:
         Created translation job
@@ -558,17 +555,18 @@ async def resolve_create_translation_job(
     Raises:
         AuthenticationError: If user is not authenticated
         ValidationError: If inputs are invalid
-        ValueError: If both auto_append and interleaved_mode are True (mutually exclusive)
         RuntimeError: If language_pair_service is not available
+        ValueError: If output_mode is not one of "replace", "append", "interleaved"
     """
-    # Validate mutual exclusivity of output modes (safety net - also validated in schema.py)
-    if auto_append and interleaved_mode:
-        raise ValueError("Cannot enable both Append Mode and Interleaved Mode simultaneously")
     import asyncio
     import shutil
     import tempfile
     from pathlib import Path
-    
+
+    valid_output_modes = {"replace", "append", "interleaved"}
+    if output_mode not in valid_output_modes:
+        raise ValidationError(f"Invalid output_mode: {output_mode}. Must be one of: {', '.join(sorted(valid_output_modes))}")
+
     username = require_auth(info)
 
     context: ResolverContext = info.context.get("resolver_context")
@@ -631,8 +629,8 @@ async def resolve_create_translation_job(
         shutil.rmtree(temp_input_dir, ignore_errors=True)
         raise ValidationError(f"Failed to retrieve files from storage: {str(e)}")
     
-    # Create job with auto_append and interleaved_mode settings
-    job = await context.job_manager.create_job(file_ids, language_pair, auto_append=auto_append, interleaved_mode=interleaved_mode)
+    # Create job with output_mode setting
+    job = await context.job_manager.create_job(file_ids, language_pair, output_mode=output_mode)
 
     # Create job-specific output directory (temp)
     job_output_dir = Path(tempfile.mkdtemp(prefix=f"doc-translation-output-{job.id}-"))

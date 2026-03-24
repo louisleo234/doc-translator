@@ -38,7 +38,7 @@ export const JOB_QUERY = gql`
         segmentsFailed
         translationWarning
       }
-      autoAppend
+      outputMode
       createdAt
       completedAt
     }
@@ -119,7 +119,7 @@ export const JOB_HISTORY_QUERY = gql`
           sourceLanguage
           targetLanguage
         }
-        autoAppend
+        outputMode
         createdAt
         completedAt
       }

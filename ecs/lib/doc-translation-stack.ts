@@ -234,7 +234,7 @@ export class DocTranslationStack extends cdk.Stack {
         JWT_SECRET: props.jwtSecret,
         S3_BUCKET: props.s3Bucket,
         MAX_CONCURRENT_FILES: props.maxConcurrentFiles ?? '5',
-        TRANSLATION_BATCH_SIZE: props.translationBatchSize ?? '10',
+        TRANSLATION_BATCH_SIZE: props.translationBatchSize ?? '20',
         MAX_FILE_SIZE: props.maxFileSize ?? '52428800',
         LOG_LEVEL: props.logLevel ?? 'INFO',
         DEBUG: props.debug ?? 'false',
