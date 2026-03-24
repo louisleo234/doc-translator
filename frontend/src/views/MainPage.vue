@@ -146,7 +146,7 @@
               <a-empty :description="t('job.noJobs', 'No completed jobs yet')" />
             </div>
 
-            <a-list v-else :data-source="completedJobs" item-layout="vertical" class="job-list">
+            <a-list v-else :data-source="completedJobs" item-layout="vertical" class="job-list" :pagination="jobPagination">
               <template #renderItem="{ item }">
                 <a-list-item class="job-item">
                   <div class="job-item-content">
@@ -280,7 +280,8 @@ const jobStore = useJobStore()
 const errorHandler = useErrorHandler({ showNotification: true })
 const loading = useLoading(['createJob'])
 const fileDownload = useFileDownload()
-const { t } = useLanguage()
+const language = useLanguage()
+const { t } = language
 
 // GraphQL mutation
 const { mutate: createTranslationJob } = useMutation<{
@@ -306,6 +307,22 @@ const interleavedMode = computed(() => outputMode.value === 'interleaved')
 const currentJob = computed(() => jobStore.currentJob)
 const completedJobs = computed(() => jobStore.completedJobs)
 const isCreatingJob = computed(() => loading.isKeyLoading('createJob'))
+
+const jobPagination = computed(() => ({
+  current: jobStore.currentPage,
+  pageSize: jobStore.pageSize,
+  total: jobStore.totalJobs,
+  showSizeChanger: true,
+  showQuickJumper: true,
+  showTotal: (total: number) => t('job.totalJobs', { count: total }),
+  onChange: (page: number, size: number) => {
+    if (size !== jobStore.pageSize) {
+      jobStore.setPageSize(size)
+    } else {
+      jobStore.setPage(page)
+    }
+  },
+}))
 
 const canStartJob = computed(() => {
   return uploadedFiles.value.length > 0 && selectedLanguagePairId.value !== ''
@@ -482,7 +499,9 @@ function getStatusColor(status: string): string {
 
 function formatDate(dateString?: string): string {
   if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString(undefined, {
+  const localeMap: Record<string, string> = { en: 'en-US', zh: 'zh-CN', vi: 'vi-VN' }
+  const locale = localeMap[language.currentLanguage.value] ?? 'en-US'
+  return new Date(dateString).toLocaleDateString(locale, {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   })
 }
@@ -714,7 +733,7 @@ function getDocumentIconColor(documentType?: DocumentType): string {
 /* File Download Grid */
 .download-section {
   padding-top: 12px;
-  border-top: 1px solid rgba(0,0,0,0.05);
+  border-top: 1px solid var(--border-color);
 }
 
 .files-grid {
@@ -772,10 +791,10 @@ function getDocumentIconColor(documentType?: DocumentType): string {
 /* Failed Files */
 .failed-files-section {
   margin-top: 16px;
-  background: #fef2f2;
+  background: var(--error-bg);
   border-radius: 8px;
   padding: 12px;
-  border: 1px solid #fee2e2;
+  border: 1px solid var(--error-border);
 }
 
 .failed-header {
@@ -790,7 +809,7 @@ function getDocumentIconColor(documentType?: DocumentType): string {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #b91c1c;
+  color: var(--error-text);
 }
 
 .error-icon {
@@ -799,10 +818,10 @@ function getDocumentIconColor(documentType?: DocumentType): string {
 
 .warning-files-section {
   margin-top: 16px;
-  background: #fffbeb;
+  background: var(--warning-bg);
   border-radius: 8px;
   padding: 12px;
-  border: 1px solid #fef3c7;
+  border: 1px solid var(--warning-border);
 }
 
 .warning-header {

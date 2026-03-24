@@ -94,7 +94,8 @@ export default {
     noJobs: 'No completed jobs yet',
     files: 'files',
     failedFiles: 'Failed Files',
-    translationWarnings: 'Translation Warnings'
+    translationWarnings: 'Translation Warnings',
+    totalJobs: 'Total {count} jobs'
   },
 
   // Progress Tracker

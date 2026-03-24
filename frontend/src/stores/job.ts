@@ -9,15 +9,16 @@ export interface JobHistoryFilters {
   status?: JobStatus
   dateFrom?: string
   dateTo?: string
-  limit?: number
 }
 
 // Response types for GraphQL query
 interface JobHistoryResponse {
   jobHistory: {
     jobs: TranslationJob[]
-    nextCursor: string | null
-    hasMore: boolean
+    total: number
+    page: number
+    pageSize: number
+    hasNext: boolean
   }
 }
 
@@ -35,8 +36,9 @@ export const useJobStore = defineStore('job', () => {
   const isPolling = ref(false)
 
   // Pagination state for API-based fetching
-  const cursor = ref<string | null>(null)
-  const hasMore = ref<boolean>(false)
+  const currentPage = ref<number>(1)
+  const pageSize = ref<number>(20)
+  const totalJobs = ref<number>(0)
   const isLoadingHistory = ref<boolean>(false)
 
   // Computed properties
@@ -58,16 +60,16 @@ export const useJobStore = defineStore('job', () => {
 
   /**
    * Fetch job history from backend API
+   * @param page Page number to fetch (defaults to currentPage)
    * @param filters Optional filters for the query
-   * @param append If true, append to existing jobs; if false, replace
    */
-  async function fetchJobHistory(filters?: JobHistoryFilters, append: boolean = false): Promise<void> {
+  async function fetchJobHistory(page?: number, filters?: JobHistoryFilters): Promise<void> {
     isLoadingHistory.value = true
 
     try {
       const variables = {
-        limit: filters?.limit ?? 20,
-        cursor: append ? cursor.value : null,
+        page: page ?? currentPage.value,
+        pageSize: pageSize.value,
         status: filters?.status,
         dateFrom: filters?.dateFrom,
         dateTo: filters?.dateTo,
@@ -80,20 +82,11 @@ export const useJobStore = defineStore('job', () => {
       })
 
       if (result.data?.jobHistory) {
-        const { jobs: fetchedJobs, nextCursor, hasMore: moreAvailable } = result.data.jobHistory
-
-        if (append) {
-          // Append fetched jobs, avoiding duplicates
-          const existingIds = new Set(jobs.value.map(j => j.id))
-          const newJobs = fetchedJobs.filter(j => !existingIds.has(j.id)).map(deepClone)
-          jobs.value = [...jobs.value, ...newJobs]
-        } else {
-          // Replace jobs with fetched results (clone to avoid frozen Apollo objects)
-          jobs.value = fetchedJobs.map(deepClone)
-        }
-
-        cursor.value = nextCursor
-        hasMore.value = moreAvailable
+        const { jobs: fetchedJobs, total, page: responsePage, pageSize: responsePageSize } = result.data.jobHistory
+        jobs.value = fetchedJobs.map(deepClone)
+        totalJobs.value = total
+        currentPage.value = responsePage
+        pageSize.value = responsePageSize
       }
     } catch (error) {
       console.error('Failed to fetch job history:', error)
@@ -104,21 +97,26 @@ export const useJobStore = defineStore('job', () => {
   }
 
   /**
-   * Load more jobs (pagination)
+   * Navigate to a specific page
    */
-  async function loadMoreJobs(filters?: JobHistoryFilters): Promise<void> {
-    if (!hasMore.value || isLoadingHistory.value) {
-      return
-    }
-    await fetchJobHistory(filters, true)
+  async function setPage(page: number, filters?: JobHistoryFilters): Promise<void> {
+    await fetchJobHistory(page, filters)
+  }
+
+  /**
+   * Change page size and reset to page 1
+   */
+  async function setPageSize(size: number, filters?: JobHistoryFilters): Promise<void> {
+    pageSize.value = size
+    await fetchJobHistory(1, filters)
   }
 
   /**
    * Reset pagination state
    */
   function resetPagination(): void {
-    cursor.value = null
-    hasMore.value = false
+    currentPage.value = 1
+    totalJobs.value = 0
   }
 
   /**
@@ -239,8 +237,9 @@ export const useJobStore = defineStore('job', () => {
     currentJob,
     jobs,
     isPolling,
-    cursor,
-    hasMore,
+    currentPage,
+    pageSize,
+    totalJobs,
     isLoadingHistory,
 
     // Computed
@@ -250,7 +249,8 @@ export const useJobStore = defineStore('job', () => {
 
     // Actions
     fetchJobHistory,
-    loadMoreJobs,
+    setPage,
+    setPageSize,
     resetPagination,
     setCurrentJob,
     updateJob,

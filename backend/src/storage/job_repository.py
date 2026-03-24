@@ -5,8 +5,6 @@ This module provides a repository pattern implementation for storing and retriev
 translation jobs using Amazon DynamoDB.
 """
 import asyncio
-import base64
-import json
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -573,22 +571,22 @@ class JobRepository:
         status: Optional[JobStatus] = None,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
-        limit: int = 50,
-        cursor: Optional[str] = None,
-    ) -> Tuple[List[TranslationJob], Optional[str]]:
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[TranslationJob], int]:
         """
-        List jobs for a user with optional filtering and pagination.
+        List jobs for a user with optional filtering and offset-based pagination.
 
         Args:
             user_id: The user ID to list jobs for.
             status: Optional status to filter by.
             date_from: Optional start date for filtering.
             date_to: Optional end date for filtering.
-            limit: Maximum number of jobs to return.
-            cursor: Pagination cursor from previous query.
+            page: Page number (1-based).
+            page_size: Number of jobs per page.
 
         Returns:
-            Tuple of (list of jobs, next cursor or None).
+            Tuple of (list of jobs for the requested page, total count).
         """
         resource = self._get_resource()
         table = resource.Table(JOBS_TABLE)
@@ -597,7 +595,6 @@ class JobRepository:
         query_kwargs = {
             "KeyConditionExpression": "user_id = :user_id",
             "ExpressionAttributeValues": {":user_id": user_id},
-            "Limit": limit,
             "ScanIndexForward": False,  # Most recent first
         }
 
@@ -624,40 +621,29 @@ class JobRepository:
         if expression_names:
             query_kwargs["ExpressionAttributeNames"] = expression_names
 
-        # Handle pagination cursor
-        if cursor:
-            try:
-                decoded = json.loads(base64.b64decode(cursor).decode("utf-8"))
-                # Validate cursor structure: must be a dict with string keys
-                if not isinstance(decoded, dict):
-                    raise ValueError("Cursor must decode to a dictionary")
-                # Validate expected DynamoDB key structure
-                expected_keys = {"user_id", "job_id"}
-                if not expected_keys.issubset(decoded.keys()):
-                    raise ValueError(f"Cursor missing required keys: {expected_keys - decoded.keys()}")
-                # Ensure all values are primitive types (str, int, float)
-                for key, value in decoded.items():
-                    if not isinstance(value, (str, int, float)):
-                        raise ValueError(f"Cursor key '{key}' has invalid type: {type(value).__name__}")
-                query_kwargs["ExclusiveStartKey"] = decoded
-            except (json.JSONDecodeError, ValueError, Exception) as e:
-                self._logger.warning(f"Invalid pagination cursor: {e}")
+        # Fetch all matching items (paginate through DynamoDB pages)
+        all_items = []
+        while True:
+            response = table.query(**query_kwargs)
+            all_items.extend(response.get("Items", []))
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            query_kwargs["ExclusiveStartKey"] = last_key
 
-        # Execute query
-        response = table.query(**query_kwargs)
+        # Sort by created_at descending (newest first)
+        all_items.sort(key=lambda item: item.get("created_at", ""), reverse=True)
 
-        # Deserialize jobs
-        jobs = [self._deserialize_job(item) for item in response.get("Items", [])]
+        total = len(all_items)
 
-        # Create next cursor if there are more results
-        next_cursor = None
-        last_key = response.get("LastEvaluatedKey")
-        if last_key:
-            next_cursor = base64.b64encode(
-                json.dumps(last_key).encode("utf-8")
-            ).decode("utf-8")
+        # Slice for the requested page
+        start = (page - 1) * page_size
+        end = start + page_size
+        page_items = all_items[start:end]
 
-        return jobs, next_cursor
+        jobs = [self._deserialize_job(item) for item in page_items]
+
+        return jobs, total
 
     async def list_jobs(
         self,
@@ -665,23 +651,23 @@ class JobRepository:
         status: Optional[JobStatus] = None,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
-        limit: int = 50,
-        cursor: Optional[str] = None,
-    ) -> Tuple[List[TranslationJob], Optional[str]]:
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[TranslationJob], int]:
         """
-        Async list jobs for a user with optional filtering and pagination.
+        Async list jobs for a user with optional filtering and offset-based pagination.
 
         Args:
             user_id: The user ID to list jobs for.
             status: Optional status to filter by.
             date_from: Optional start date for filtering.
             date_to: Optional end date for filtering.
-            limit: Maximum number of jobs to return.
-            cursor: Pagination cursor from previous query.
+            page: Page number (1-based).
+            page_size: Number of jobs per page.
 
         Returns:
-            Tuple of (list of jobs, next cursor or None).
+            Tuple of (list of jobs for the requested page, total count).
         """
         return await self._run_sync(
-            self._list_jobs, user_id, status, date_from, date_to, limit, cursor
+            self._list_jobs, user_id, status, date_from, date_to, page, page_size
         )

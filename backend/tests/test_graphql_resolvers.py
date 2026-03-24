@@ -324,7 +324,7 @@ async def test_resolve_job_history_basic(mock_info, mock_job_manager):
         ),
         file_ids=["file-1"]
     )
-    mock_job_store.list_jobs = AsyncMock(return_value=([mock_job], None))
+    mock_job_store.list_jobs = AsyncMock(return_value=([mock_job], 1))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 
@@ -332,14 +332,16 @@ async def test_resolve_job_history_basic(mock_info, mock_job_manager):
 
     assert result.jobs is not None
     assert len(result.jobs) == 1
-    assert result.next_cursor is None
-    assert result.has_more is False
+    assert result.total == 1
+    assert result.page == 1
+    assert result.page_size == 20
+    assert result.has_next is False
     mock_job_store.set_user_context.assert_called_once_with("testuser")
 
 
 @pytest.mark.asyncio
 async def test_resolve_job_history_with_pagination(mock_info, mock_job_manager):
-    """Test resolve_job_history with pagination cursor."""
+    """Test resolve_job_history with page and page_size."""
     mock_job_store = Mock()
     mock_job = TranslationJob(
         status=JobStatus.COMPLETED,
@@ -353,37 +355,44 @@ async def test_resolve_job_history_with_pagination(mock_info, mock_job_manager):
         ),
         file_ids=["file-1"]
     )
-    mock_job_store.list_jobs = AsyncMock(return_value=([mock_job], "next-cursor-token"))
+    mock_job_store.list_jobs = AsyncMock(return_value=([mock_job], 25))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 
-    result = await resolve_job_history(mock_info, limit=10, cursor="prev-cursor")
+    result = await resolve_job_history(mock_info, page=1, page_size=10)
 
-    assert result.next_cursor == "next-cursor-token"
-    assert result.has_more is True
+    assert result.total == 25
+    assert result.page == 1
+    assert result.page_size == 10
+    assert result.has_next is True
     mock_job_store.list_jobs.assert_called_once()
     call_kwargs = mock_job_store.list_jobs.call_args[1]
-    assert call_kwargs["limit"] == 10
-    assert call_kwargs["cursor"] == "prev-cursor"
+    assert call_kwargs["page"] == 1
+    assert call_kwargs["page_size"] == 10
 
 
 @pytest.mark.asyncio
-async def test_resolve_job_history_clamps_limit(mock_info, mock_job_manager):
-    """Test resolve_job_history clamps limit to valid range."""
+async def test_resolve_job_history_clamps_page_size(mock_info, mock_job_manager):
+    """Test resolve_job_history clamps page_size to valid range."""
     mock_job_store = Mock()
-    mock_job_store.list_jobs = AsyncMock(return_value=([], None))
+    mock_job_store.list_jobs = AsyncMock(return_value=([], 0))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 
-    # Test limit too high (should clamp to 100)
-    await resolve_job_history(mock_info, limit=200)
+    # Test page_size too high (should clamp to 100)
+    await resolve_job_history(mock_info, page_size=200)
     call_kwargs = mock_job_store.list_jobs.call_args[1]
-    assert call_kwargs["limit"] == 100
+    assert call_kwargs["page_size"] == 100
 
-    # Test limit too low (should clamp to 1)
-    await resolve_job_history(mock_info, limit=-5)
+    # Test page_size too low (should clamp to 1)
+    await resolve_job_history(mock_info, page_size=-5)
     call_kwargs = mock_job_store.list_jobs.call_args[1]
-    assert call_kwargs["limit"] == 1
+    assert call_kwargs["page_size"] == 1
+
+    # Test page too low (should clamp to 1)
+    await resolve_job_history(mock_info, page=-1)
+    call_kwargs = mock_job_store.list_jobs.call_args[1]
+    assert call_kwargs["page"] == 1
 
 
 @pytest.mark.asyncio
@@ -392,7 +401,7 @@ async def test_resolve_job_history_with_status_filter(mock_info, mock_job_manage
     from src.graphql.schema import JobStatus as GQLJobStatus
 
     mock_job_store = Mock()
-    mock_job_store.list_jobs = AsyncMock(return_value=([], None))
+    mock_job_store.list_jobs = AsyncMock(return_value=([], 0))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 
@@ -406,7 +415,7 @@ async def test_resolve_job_history_with_status_filter(mock_info, mock_job_manage
 async def test_resolve_job_history_with_date_filters(mock_info, mock_job_manager):
     """Test resolve_job_history with date range filters."""
     mock_job_store = Mock()
-    mock_job_store.list_jobs = AsyncMock(return_value=([], None))
+    mock_job_store.list_jobs = AsyncMock(return_value=([], 0))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 
@@ -429,7 +438,7 @@ async def test_resolve_job_history_with_date_filters(mock_info, mock_job_manager
 async def test_resolve_job_history_invalid_date_ignored(mock_info, mock_job_manager):
     """Test resolve_job_history ignores invalid date formats."""
     mock_job_store = Mock()
-    mock_job_store.list_jobs = AsyncMock(return_value=([], None))
+    mock_job_store.list_jobs = AsyncMock(return_value=([], 0))
     mock_job_store.set_user_context = Mock()
     mock_job_manager.job_store = mock_job_store
 

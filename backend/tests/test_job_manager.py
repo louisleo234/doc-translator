@@ -226,9 +226,9 @@ class TestJobStore:
         job3 = TranslationJob(files_total=3)
 
         # Mock list_jobs to return jobs in reverse order (newest first)
-        mock_repository.list_jobs.return_value = ([job3, job2, job1], None)
+        mock_repository.list_jobs.return_value = ([job3, job2, job1], 3)
 
-        jobs, cursor = await store.list_jobs()
+        jobs, total = await store.list_jobs()
 
         assert len(jobs) == 3
         # Should be sorted by creation time, newest first
@@ -413,7 +413,7 @@ class TestJobManager:
         job2 = await manager.create_job(file_ids=["file2"], language_pair=language_pair)
         job3 = await manager.create_job(file_ids=["file3"], language_pair=language_pair)
 
-        mock_repository.list_jobs.return_value = ([job1, job2, job3], None)
+        mock_repository.list_jobs.return_value = ([job1, job2, job3], 3)
 
         jobs = await manager.list_jobs()
 

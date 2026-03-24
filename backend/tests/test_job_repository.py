@@ -1,8 +1,6 @@
 """
 Unit tests for JobRepository - DynamoDB storage for translation jobs.
 """
-import base64
-import json
 import pytest
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -334,53 +332,59 @@ class TestJobRepository:
         resource, table = mock_dynamodb_resource
         table.query.return_value = {
             "Items": [sample_dynamodb_item],
-            "LastEvaluatedKey": None,
         }
 
-        jobs, cursor = await repository.list_jobs("user-456")
+        jobs, total = await repository.list_jobs("user-456")
 
         assert len(jobs) == 1
         assert jobs[0].id == "job-123"
-        assert cursor is None
+        assert total == 1
 
     async def test_list_jobs_with_pagination(self, repository, sample_dynamodb_item, mock_dynamodb_resource):
-        """Test listing jobs with pagination."""
+        """Test listing jobs with page and page_size."""
         resource, table = mock_dynamodb_resource
-        last_key = {"user_id": "user-456", "job_id": "job-123"}
+        # Simulate 3 items across one DynamoDB page
+        items = [sample_dynamodb_item, sample_dynamodb_item, sample_dynamodb_item]
         table.query.return_value = {
-            "Items": [sample_dynamodb_item],
-            "LastEvaluatedKey": last_key,
+            "Items": items,
         }
 
-        jobs, cursor = await repository.list_jobs("user-456", limit=10)
+        jobs, total = await repository.list_jobs("user-456", page=1, page_size=1)
 
         assert len(jobs) == 1
-        assert cursor is not None
-        # Cursor should be base64 encoded JSON
-        decoded = json.loads(base64.b64decode(cursor).decode("utf-8"))
-        assert decoded == last_key
+        assert total == 3
 
-    async def test_list_jobs_with_cursor(self, repository, sample_dynamodb_item, mock_dynamodb_resource):
-        """Test listing jobs starting from cursor."""
+    async def test_list_jobs_page_2(self, repository, sample_dynamodb_item, mock_dynamodb_resource):
+        """Test listing jobs returns correct page."""
         resource, table = mock_dynamodb_resource
-        table.query.return_value = {"Items": [sample_dynamodb_item]}
+        items = [sample_dynamodb_item, sample_dynamodb_item, sample_dynamodb_item]
+        table.query.return_value = {
+            "Items": items,
+        }
 
-        # Create a valid cursor
-        cursor_data = {"user_id": "user-456", "job_id": "job-100"}
-        cursor = base64.b64encode(json.dumps(cursor_data).encode("utf-8")).decode("utf-8")
+        jobs, total = await repository.list_jobs("user-456", page=2, page_size=1)
 
-        jobs, _ = await repository.list_jobs("user-456", cursor=cursor)
+        assert len(jobs) == 1
+        assert total == 3
 
-        call_kwargs = table.query.call_args[1]
-        assert "ExclusiveStartKey" in call_kwargs
-        assert call_kwargs["ExclusiveStartKey"] == cursor_data
+    async def test_list_jobs_page_beyond_range(self, repository, sample_dynamodb_item, mock_dynamodb_resource):
+        """Test listing jobs beyond available pages returns empty."""
+        resource, table = mock_dynamodb_resource
+        table.query.return_value = {
+            "Items": [sample_dynamodb_item],
+        }
+
+        jobs, total = await repository.list_jobs("user-456", page=100, page_size=20)
+
+        assert jobs == []
+        assert total == 1
 
     async def test_list_jobs_filter_by_status(self, repository, sample_dynamodb_item, mock_dynamodb_resource):
         """Test listing jobs filtered by status."""
         resource, table = mock_dynamodb_resource
         table.query.return_value = {"Items": [sample_dynamodb_item]}
 
-        jobs, _ = await repository.list_jobs("user-456", status=JobStatus.PENDING)
+        jobs, total = await repository.list_jobs("user-456", status=JobStatus.PENDING)
 
         call_kwargs = table.query.call_args[1]
         assert "FilterExpression" in call_kwargs or "IndexName" in call_kwargs
@@ -393,7 +397,7 @@ class TestJobRepository:
         date_from = datetime(2026, 1, 1, tzinfo=timezone.utc)
         date_to = datetime(2026, 1, 31, tzinfo=timezone.utc)
 
-        jobs, _ = await repository.list_jobs(
+        jobs, total = await repository.list_jobs(
             "user-456",
             date_from=date_from,
             date_to=date_to,
@@ -408,10 +412,10 @@ class TestJobRepository:
         resource, table = mock_dynamodb_resource
         table.query.return_value = {"Items": []}
 
-        jobs, cursor = await repository.list_jobs("user-456")
+        jobs, total = await repository.list_jobs("user-456")
 
         assert jobs == []
-        assert cursor is None
+        assert total == 0
 
     # =========================================================================
     # Table Initialization Tests

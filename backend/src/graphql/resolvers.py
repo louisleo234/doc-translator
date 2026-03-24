@@ -333,8 +333,8 @@ async def resolve_jobs(info: Info) -> List[GQLTranslationJob]:
 
 async def resolve_job_history(
     info: Info,
-    limit: int = 20,
-    cursor: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
     status: Optional[GQLJobStatus] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None
@@ -344,14 +344,14 @@ async def resolve_job_history(
 
     Args:
         info: Strawberry Info object
-        limit: Maximum number of jobs to return (1-100, default 20)
-        cursor: Pagination cursor from previous query
+        page: Page number (1-based, default 1)
+        page_size: Number of jobs per page (1-100, default 20)
         status: Optional status filter (GraphQL JobStatus enum)
         date_from: Optional start date filter (ISO format string)
         date_to: Optional end date filter (ISO format string)
 
     Returns:
-        JobHistoryResponse with jobs, next_cursor, and has_more
+        JobHistoryResponse with jobs, total, page, page_size, has_next
 
     Raises:
         AuthenticationError: If user is not authenticated
@@ -365,8 +365,9 @@ async def resolve_job_history(
     # Set user context on job_store
     context.job_manager.job_store.set_user_context(username)
 
-    # Clamp limit to valid range (1-100)
-    clamped_limit = max(1, min(100, limit))
+    # Clamp page and page_size to valid ranges
+    clamped_page = max(1, page)
+    clamped_page_size = max(1, min(100, page_size))
 
     # Convert GraphQL JobStatus enum to domain JobStatus
     status_filter = None
@@ -388,9 +389,9 @@ async def resolve_job_history(
             pass  # Ignore invalid date format
 
     # Call job_store.list_jobs with parameters
-    jobs, next_cursor = await context.job_manager.job_store.list_jobs(
-        limit=clamped_limit,
-        cursor=cursor,
+    jobs, total = await context.job_manager.job_store.list_jobs(
+        page=clamped_page,
+        page_size=clamped_page_size,
         status_filter=status_filter,
         date_from=parsed_date_from,
         date_to=parsed_date_to
@@ -401,8 +402,10 @@ async def resolve_job_history(
 
     return JobHistoryResponse(
         jobs=gql_jobs,
-        next_cursor=next_cursor,
-        has_more=next_cursor is not None
+        total=total,
+        page=clamped_page,
+        page_size=clamped_page_size,
+        has_next=(clamped_page * clamped_page_size) < total
     )
 
 

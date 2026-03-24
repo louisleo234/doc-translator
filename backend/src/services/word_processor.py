@@ -525,6 +525,14 @@ class WordProcessor(DocumentProcessor):
             # Complex case: multiple runs with formatting
             self._update_paragraph_text_with_runs(paragraph, translation, runs_meta)
     
+    def _clear_paragraph_content(self, paragraph: Paragraph) -> None:
+        """Remove all content elements from paragraph XML, preserving paragraph properties (w:pPr)."""
+        p_elem = paragraph._element
+        pPr = p_elem.find(qn('w:pPr'))
+        for child in list(p_elem):
+            if child is not pPr:
+                p_elem.remove(child)
+
     def _update_paragraph_text_simple(
         self,
         paragraph: Paragraph,
@@ -541,9 +549,9 @@ class WordProcessor(DocumentProcessor):
             font_name = first_run.font.name
             font_size = first_run.font.size
             
-            # Clear paragraph
-            paragraph.clear()
-            
+            # Clear paragraph (including hyperlinks/field codes for TOC entries)
+            self._clear_paragraph_content(paragraph)
+
             # Add new run with translation
             new_run = paragraph.add_run(translation)
             new_run.bold = bold
@@ -554,6 +562,8 @@ class WordProcessor(DocumentProcessor):
             if font_size:
                 new_run.font.size = font_size
         else:
+            # Clear any non-run content (e.g. hyperlinks in TOC entries)
+            self._clear_paragraph_content(paragraph)
             paragraph.add_run(translation)
     
     def _update_paragraph_text_with_runs(
@@ -575,9 +585,9 @@ class WordProcessor(DocumentProcessor):
         # Get formatting from first run
         first_run_meta = runs_meta[0]
         
-        # Clear paragraph
-        paragraph.clear()
-        
+        # Clear paragraph (including hyperlinks/field codes for TOC entries)
+        self._clear_paragraph_content(paragraph)
+
         # Add new run with translation and preserved formatting
         new_run = paragraph.add_run(translation)
         

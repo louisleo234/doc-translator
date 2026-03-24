@@ -94,7 +94,8 @@ export default {
     noJobs: '暂无已完成的任务',
     files: '个文件',
     failedFiles: '失败的文件',
-    translationWarnings: '翻译警告'
+    translationWarnings: '翻译警告',
+    totalJobs: '共 {count} 个任务'
   },
 
   // Progress Tracker

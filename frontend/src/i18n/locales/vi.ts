@@ -94,7 +94,8 @@ export default {
     noJobs: 'Chưa có công việc hoàn thành',
     files: 'tệp',
     failedFiles: 'Tệp thất bại',
-    translationWarnings: 'Cảnh báo dịch thuật'
+    translationWarnings: 'Cảnh báo dịch thuật',
+    totalJobs: 'Tổng cộng {count} công việc'
   },
 
   // Progress Tracker

@@ -281,12 +281,16 @@ class JobHistoryResponse:
 
     Attributes:
         jobs: List of translation jobs for the current page
-        next_cursor: Pagination cursor for the next page (None if no more pages)
-        has_more: Whether there are more jobs available
+        total: Total number of matching jobs
+        page: Current page number (1-based)
+        page_size: Number of jobs per page
+        has_next: Whether there are more pages available
     """
     jobs: List[TranslationJob]
-    next_cursor: Optional[str]
-    has_more: bool
+    total: int
+    page: int
+    page_size: int
+    has_next: bool
 
 
 @strawberry.type
@@ -449,8 +453,8 @@ class Query:
     async def job_history(
         self,
         info: Info,
-        limit: int = 20,
-        cursor: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
         status: Optional[JobStatus] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None
@@ -459,20 +463,20 @@ class Query:
         Get paginated job history for the authenticated user.
 
         Args:
-            limit: Maximum number of jobs to return (1-100, default 20)
-            cursor: Pagination cursor from previous query
+            page: Page number (1-based, default 1)
+            page_size: Number of jobs per page (1-100, default 20)
             status: Optional status filter
             date_from: Optional start date filter (ISO format)
             date_to: Optional end date filter (ISO format)
 
         Returns:
-            JobHistoryResponse: Paginated list of jobs with cursor
+            JobHistoryResponse: Paginated list of jobs
 
         Raises:
             AuthenticationError: If the user is not authenticated
         """
         from .resolvers import resolve_job_history
-        return await resolve_job_history(info, limit, cursor, status, date_from, date_to)
+        return await resolve_job_history(info, page, page_size, status, date_from, date_to)
 
     @strawberry.field
     async def language_pairs(self, info: Info) -> List[LanguagePair]:

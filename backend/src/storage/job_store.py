@@ -105,24 +105,24 @@ class JobStore:
 
     async def list_jobs(
         self,
-        limit: int = 50,
-        cursor: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
         status_filter: Optional[JobStatus] = None,
         date_from: Optional[datetime] = None,
         date_to: Optional[datetime] = None,
-    ) -> Tuple[List[TranslationJob], Optional[str]]:
+    ) -> Tuple[List[TranslationJob], int]:
         """
-        List jobs for the current user with optional filtering and pagination.
+        List jobs for the current user with optional filtering and offset-based pagination.
 
         Args:
-            limit: Maximum number of jobs to return (default 50).
-            cursor: Pagination cursor from previous query.
+            page: Page number (1-based, default 1).
+            page_size: Number of jobs per page (default 20).
             status_filter: Optional status to filter by.
             date_from: Optional start date for filtering.
             date_to: Optional end date for filtering.
 
         Returns:
-            Tuple of (list of jobs, next cursor or None).
+            Tuple of (list of jobs for the requested page, total count).
 
         Raises:
             ValueError: If user context is not set.
@@ -133,8 +133,8 @@ class JobStore:
             status=status_filter,
             date_from=date_from,
             date_to=date_to,
-            limit=limit,
-            cursor=cursor,
+            page=page,
+            page_size=page_size,
         )
 
     async def delete_job(self, job_id: str) -> bool:

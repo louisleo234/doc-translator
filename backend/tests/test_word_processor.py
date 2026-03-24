@@ -319,6 +319,72 @@ class TestWordProcessorWriteTranslated:
                 output_path.unlink()
 
 
+class TestWordProcessorTOCParagraphs:
+    """Tests for WordProcessor handling of TOC (Table of Contents) paragraphs."""
+
+    @pytest.mark.asyncio
+    async def test_write_translated_replaces_toc_hyperlink_paragraphs(self):
+        """Test that TOC paragraphs with hyperlinks are fully replaced, not appended."""
+        from lxml import etree
+        processor = WordProcessor()
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as f:
+            doc = Document()
+            # Add a normal paragraph first so the TOC paragraph gets a known index
+            doc.add_paragraph("Intro")
+
+            # Add a paragraph that simulates a TOC entry with a w:hyperlink element
+            toc_para = doc.add_paragraph()
+            toc_para_elem = toc_para._element
+            nsmap_w = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+            # Build a hyperlink element containing a run with text (like a real TOC entry)
+            hyperlink = etree.SubElement(toc_para_elem, f'{{{nsmap_w}}}hyperlink')
+            hyperlink.set(f'{{{nsmap_w}}}anchor', '_Toc123')
+            h_run = etree.SubElement(hyperlink, f'{{{nsmap_w}}}r')
+            h_text = etree.SubElement(h_run, f'{{{nsmap_w}}}t')
+            h_text.text = '目的与范围'
+
+            doc.save(f.name)
+            input_path = Path(f.name)
+
+        with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as f:
+            output_path = Path(f.name)
+
+        try:
+            segments = await processor.extract_text(input_path)
+            # Find the TOC segment
+            toc_segments = [s for s in segments if '目的与范围' in s.text]
+            assert len(toc_segments) == 1
+
+            translations = []
+            all_segments = []
+            for seg in segments:
+                all_segments.append(seg)
+                if '目的与范围' in seg.text:
+                    translations.append('Purpose and Scope')
+                else:
+                    translations.append(seg.text)
+
+            success = await processor.write_translated(
+                input_path, all_segments, translations, output_path, auto_append=False
+            )
+            assert success is True
+
+            # Verify the TOC paragraph only contains the translated text, not both
+            result_doc = Document(str(output_path))
+            toc_para_text = result_doc.paragraphs[1].text
+            assert toc_para_text == 'Purpose and Scope', (
+                f"Expected only translated text but got: '{toc_para_text}'"
+            )
+            # Ensure original text is not present
+            assert '目的与范围' not in toc_para_text
+        finally:
+            input_path.unlink()
+            if output_path.exists():
+                output_path.unlink()
+
+
 class TestWordProcessorMergedCells:
     """Tests for WordProcessor handling of merged cells."""
     

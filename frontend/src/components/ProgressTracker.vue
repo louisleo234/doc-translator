@@ -372,14 +372,14 @@ defineExpose({
 }
 
 .progress-stats {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .files-section {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .files-section h4 {
@@ -400,7 +400,7 @@ defineExpose({
 }
 
 .segment-stats {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -431,7 +431,7 @@ defineExpose({
 .job-info {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Loading animation */

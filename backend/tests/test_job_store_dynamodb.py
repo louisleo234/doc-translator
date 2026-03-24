@@ -276,47 +276,47 @@ class TestJobStoreListJobs:
     @pytest.mark.asyncio
     async def test_list_jobs_basic(self, store, mock_repository, sample_jobs):
         """Test list_jobs returns jobs from repository."""
-        mock_repository.list_jobs.return_value = (sample_jobs, None)
+        mock_repository.list_jobs.return_value = (sample_jobs, 2)
 
-        jobs, cursor = await store.list_jobs()
+        jobs, total = await store.list_jobs()
 
         assert len(jobs) == 2
-        assert cursor is None
+        assert total == 2
         mock_repository.list_jobs.assert_called_once_with(
             "user-123",
             status=None,
             date_from=None,
             date_to=None,
-            limit=50,
-            cursor=None,
+            page=1,
+            page_size=20,
         )
 
     @pytest.mark.asyncio
-    async def test_list_jobs_with_limit(self, store, mock_repository, sample_jobs):
-        """Test list_jobs with limit parameter."""
-        mock_repository.list_jobs.return_value = (sample_jobs[:1], "cursor123")
+    async def test_list_jobs_with_page_size(self, store, mock_repository, sample_jobs):
+        """Test list_jobs with page_size parameter."""
+        mock_repository.list_jobs.return_value = (sample_jobs[:1], 2)
 
-        jobs, cursor = await store.list_jobs(limit=1)
+        jobs, total = await store.list_jobs(page_size=1)
 
         assert len(jobs) == 1
-        assert cursor == "cursor123"
+        assert total == 2
         call_kwargs = mock_repository.list_jobs.call_args[1]
-        assert call_kwargs["limit"] == 1
+        assert call_kwargs["page_size"] == 1
 
     @pytest.mark.asyncio
-    async def test_list_jobs_with_cursor(self, store, mock_repository, sample_jobs):
-        """Test list_jobs with pagination cursor."""
-        mock_repository.list_jobs.return_value = (sample_jobs, None)
+    async def test_list_jobs_with_page(self, store, mock_repository, sample_jobs):
+        """Test list_jobs with page parameter."""
+        mock_repository.list_jobs.return_value = (sample_jobs, 2)
 
-        await store.list_jobs(cursor="cursor123")
+        await store.list_jobs(page=2)
 
         call_kwargs = mock_repository.list_jobs.call_args[1]
-        assert call_kwargs["cursor"] == "cursor123"
+        assert call_kwargs["page"] == 2
 
     @pytest.mark.asyncio
     async def test_list_jobs_with_status_filter(self, store, mock_repository, sample_jobs):
         """Test list_jobs with status filter."""
-        mock_repository.list_jobs.return_value = ([sample_jobs[0]], None)
+        mock_repository.list_jobs.return_value = ([sample_jobs[0]], 1)
 
         await store.list_jobs(status_filter=JobStatus.COMPLETED)
 
@@ -326,7 +326,7 @@ class TestJobStoreListJobs:
     @pytest.mark.asyncio
     async def test_list_jobs_with_date_range(self, store, mock_repository, sample_jobs):
         """Test list_jobs with date range filter."""
-        mock_repository.list_jobs.return_value = (sample_jobs, None)
+        mock_repository.list_jobs.return_value = (sample_jobs, 2)
         date_from = datetime(2026, 1, 1, tzinfo=timezone.utc)
         date_to = datetime(2026, 1, 31, tzinfo=timezone.utc)
 
