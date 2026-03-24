@@ -38,6 +38,11 @@ export const JOB_QUERY = gql`
         segmentsFailed
         translationWarning
       }
+      languagePair {
+        id
+        sourceLanguage
+        targetLanguage
+      }
       outputMode
       createdAt
       completedAt

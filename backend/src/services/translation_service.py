@@ -110,7 +110,7 @@ Use the following term translations consistently throughout the document:"""
 
 Rules:
 1. TERMINOLOGY: When translating terms from the TERMINOLOGY REFERENCE above, use the provided translations exactly.
-2. LANGUAGE DETECTION: Translate all {source_lang} text to {target_lang}. If the input clearly contains no {source_lang} text (e.g., it is purely English or purely {target_lang}), return it unchanged. When in doubt, translate.
+2. LANGUAGE DETECTION: Translate all {source_lang} text to {target_lang}. If an individual text item clearly contains no {source_lang} text (e.g., it is purely English or purely {target_lang}), return that item unchanged. When in doubt, always translate. Never skip translating {source_lang} text just because other items in the input are in {target_lang} or English.
 3. ENGLISH PRESERVATION: Do NOT translate English text. Keep all English words, technical terms, abbreviations, and proper nouns exactly as they appear.
 4. MIXED CONTENT: When text contains both {source_lang} and English, translate the {source_lang} portions while keeping English text in place. If text contains {target_lang} mixed with {source_lang}, translate the {source_lang} portions to {target_lang}. Do NOT skip {source_lang} text just because {target_lang} text is also present.
 5. OUTPUT FORMAT: Return ONLY the translation without any explanations, notes, or additional text."""
@@ -118,9 +118,9 @@ Rules:
         # Add JSON format instructions for batch mode
         if is_batch:
             prompt += f"""
-6. JSON FORMAT: The input is a JSON array of objects with "index" and "text" fields. Return a JSON array with the same structure, where each object has "index" (matching the input) and "translation" fields. Example:
-Input: [{{"index": 0, "text": "中文文本"}}]
-Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}]"""
+6. JSON FORMAT: The input is a JSON array of objects with "index" and "text" fields. Return a JSON array with the same structure, where each object has "index" (matching the input) and "translation" fields. CRITICAL: Evaluate each item INDEPENDENTLY — the language of other items must NOT influence your decision for any given item. If an item contains {source_lang} text, translate it to {target_lang} regardless of what other items contain. Example:
+Input: [{{"index": 0, "text": "中文文本"}}, {{"index": 1, "text": "English text"}}, {{"index": 2, "text": "更多中文"}}]
+Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 1, "translation": "English text"}}, {{"index": 2, "translation": "Thêm tiếng Trung"}}]"""
 
         return prompt
 

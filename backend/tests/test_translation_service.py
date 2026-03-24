@@ -67,8 +67,8 @@ class TestSystemPromptConstruction:
         assert "LANGUAGE DETECTION" in prompt
         assert "Translate all" in prompt
         assert "Chinese" in prompt
-        assert "return it unchanged" in prompt.lower()
-        assert "when in doubt, translate" in prompt.lower()
+        assert "return that item unchanged" in prompt.lower()
+        assert "when in doubt, always translate" in prompt.lower()
     
     def test_system_prompt_contains_english_preservation_rules(
         self,
