@@ -26,23 +26,20 @@ export const CREATE_TRANSLATION_JOB_MUTATION = gql`
     $fileIds: [String!]!, 
     $languagePairId: String!, 
     $catalogIds: [String!],
-    $autoAppend: Boolean,
-    $interleavedMode: Boolean
+    $outputMode: String
   ) {
     createTranslationJob(
-      fileIds: $fileIds, 
-      languagePairId: $languagePairId, 
+      fileIds: $fileIds,
+      languagePairId: $languagePairId,
       catalogIds: $catalogIds,
-      autoAppend: $autoAppend,
-      interleavedMode: $interleavedMode
+      outputMode: $outputMode
     ) {
       id
       status
       progress
       filesTotal
       filesCompleted
-      autoAppend
-      interleavedMode
+      outputMode
       createdAt
     }
   }

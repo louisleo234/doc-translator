@@ -99,24 +99,17 @@ class TextProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to a plain text file.
-
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
 
         Args:
             file_path: Path to the original text file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated file should be saved
-            auto_append: Whether to append translation to original text
-            interleaved_mode: Whether to interleave original and translated lines
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
 
         Returns:
             True if writing succeeded, False otherwise
@@ -125,7 +118,7 @@ class TextProcessor(DocumentProcessor):
             output_parts = []
             for seg, trans in zip(segments, translations):
                 final_text = apply_output_mode(
-                    seg.text, trans, auto_append, interleaved_mode
+                    seg.text, trans, output_mode
                 )
                 output_parts.append(final_text)
 

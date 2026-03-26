@@ -25,13 +25,13 @@
           </a-card>
         </a-col>
 
-        <!-- Language Pair and Term Catalogs - Side by side on larger screens -->
+        <!-- Language Pair + Term Catalogs (merged) and Start Translation - Side by side -->
         <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
           <a-card :bordered="false" class="section-card glass-card">
             <template #title>
               <div class="card-header">
                 <GlobalOutlined class="header-icon" />
-                <span>{{ t('languagePair.title') }}</span>
+                <span>{{ t('thesaurus.languageAndCatalog', 'Language & Catalog') }}</span>
               </div>
             </template>
             <LanguagePairSelector
@@ -40,31 +40,30 @@
               @change="handleLanguagePairChange"
               @error="handleLanguagePairError"
             />
-          </a-card>
-        </a-col>
 
-        <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
-          <a-card :bordered="false" class="section-card glass-card" :class="{ 'disabled-card': !selectedLanguagePairId }">
-            <template #title>
-              <div class="card-header">
-                <BookOutlined class="header-icon" />
+            <!-- Term Catalogs sub-section -->
+            <div class="term-catalogs-section">
+              <div class="sub-section-header">
                 <span>{{ t('thesaurus.termCatalogs', 'Term Catalogs') }}</span>
+                <a-tooltip :title="t('thesaurus.catalogSelectorHelp', 'Select catalogs to use for translation. Drag to reorder priority.')">
+                  <QuestionCircleOutlined class="help-icon" />
+                </a-tooltip>
                 <span class="optional-badge">{{ t('common.optional', 'Optional') }}</span>
               </div>
-            </template>
-            <div v-if="!selectedLanguagePairId" class="placeholder-content">
-              <a-empty :description="t('thesaurus.selectLanguagePairFirst', 'Select a language pair first')" :image="false" />
+              <div v-if="!selectedLanguagePairId" class="placeholder-content">
+                <a-empty :description="t('thesaurus.selectLanguagePairFirst', 'Select a language pair first')" :image="false" />
+              </div>
+              <CatalogSelector
+                v-else
+                v-model="selectedCatalogIds"
+                :language-pair-id="selectedLanguagePairId"
+              />
             </div>
-            <CatalogSelector
-              v-else
-              v-model="selectedCatalogIds"
-              :language-pair-id="selectedLanguagePairId"
-            />
           </a-card>
         </a-col>
 
-        <!-- Start Translation - Full width after the two cards above -->
-        <a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
+        <!-- Start Translation -->
+        <a-col :xs="24" :sm="24" :md="12" :lg="12" :xl="12">
           <a-card :bordered="false" class="section-card glass-card action-card">
             <template #title>
               <div class="card-header">
@@ -134,7 +133,7 @@
 
         <!-- Completed Jobs Section -->
         <a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
-          <a-card :bordered="false" title="Recent History" class="section-card glass-card history-card">
+          <a-card :bordered="false" class="section-card glass-card history-card">
              <template #title>
               <div class="card-header">
                 <HistoryOutlined class="header-icon" />
@@ -146,7 +145,7 @@
               <a-empty :description="t('job.noJobs', 'No completed jobs yet')" />
             </div>
 
-            <a-list v-else :data-source="completedJobs" item-layout="vertical" class="job-list">
+            <a-list v-else :data-source="completedJobs" item-layout="vertical" class="job-list" :pagination="jobPagination">
               <template #renderItem="{ item }">
                 <a-list-item class="job-item">
                   <div class="job-item-content">
@@ -155,7 +154,12 @@
                              <a-tag :color="getStatusColor(item.status)" class="status-tag">
                                 {{ item.status }}
                              </a-tag>
-                             <span class="job-id">#{{ item.id }}</span>
+                             <span v-if="item.languagePair" class="job-lang-pair">
+                                {{ item.languagePair.sourceLanguage }} → {{ item.languagePair.targetLanguage }}
+                             </span>
+                             <a-tag v-if="item.outputMode" class="output-mode-tag">
+                                {{ t(`outputMode.${item.outputMode}`) }}
+                             </a-tag>
                              <span class="job-date">{{ formatDate(item.createdAt) }}</span>
                         </div>
                          <div class="job-stats">
@@ -210,6 +214,23 @@
                         <span class="error-text">{{ file.error }}</span>
                       </div>
                     </div>
+
+                    <!-- Translation warnings (segments failed within completed files) -->
+                    <div
+                      v-if="getFilesWithWarnings(item).length > 0"
+                      class="warning-files-section"
+                    >
+                      <div class="warning-header">{{ t('job.translationWarnings', 'Translation Warnings') }}</div>
+                      <div
+                        v-for="file in getFilesWithWarnings(item)"
+                        :key="file.originalFilename"
+                        class="warning-file"
+                      >
+                        <WarningOutlined class="warning-icon" />
+                        <span class="filename">{{ file.originalFilename }}</span>
+                        <span class="warning-text">{{ file.translationWarning }}</span>
+                      </div>
+                    </div>
                   </div>
                 </a-list-item>
               </template>
@@ -238,12 +259,12 @@ import {
   FilePptOutlined,
   FilePdfOutlined,
   CloseCircleOutlined,
+  WarningOutlined,
   InfoCircleOutlined,
   GlobalOutlined,
   ThunderboltOutlined,
   HistoryOutlined,
   SyncOutlined,
-  BookOutlined,
   QuestionCircleOutlined
 } from '@ant-design/icons-vue'
 import type { TranslationJob, FileUpload, LanguagePair, DocumentType, OutputMode } from '@/types'
@@ -262,7 +283,8 @@ const jobStore = useJobStore()
 const errorHandler = useErrorHandler({ showNotification: true })
 const loading = useLoading(['createJob'])
 const fileDownload = useFileDownload()
-const { t } = useLanguage()
+const language = useLanguage()
+const { t } = language
 
 // GraphQL mutation
 const { mutate: createTranslationJob } = useMutation<{
@@ -280,14 +302,26 @@ const selectedLanguagePair = ref<LanguagePair | null>(null)
 const selectedCatalogIds = ref<string[]>([])
 const outputMode = ref<OutputMode>('replace')
 
-// Computed properties for GraphQL mutation
-const autoAppend = computed(() => outputMode.value === 'append')
-const interleavedMode = computed(() => outputMode.value === 'interleaved')
-
 // Computed
 const currentJob = computed(() => jobStore.currentJob)
 const completedJobs = computed(() => jobStore.completedJobs)
 const isCreatingJob = computed(() => loading.isKeyLoading('createJob'))
+
+const jobPagination = computed(() => ({
+  current: jobStore.currentPage,
+  pageSize: jobStore.pageSize,
+  total: jobStore.totalJobs,
+  showSizeChanger: true,
+  showQuickJumper: true,
+  showTotal: (total: number) => t('job.totalJobs', { count: total }),
+  onChange: (page: number, size: number) => {
+    if (size !== jobStore.pageSize) {
+      jobStore.setPageSize(size)
+    } else {
+      jobStore.setPage(page)
+    }
+  },
+}))
 
 const canStartJob = computed(() => {
   return uploadedFiles.value.length > 0 && selectedLanguagePairId.value !== ''
@@ -351,8 +385,7 @@ async function handleStartTranslation() {
         fileIds,
         languagePairId: selectedLanguagePairId.value,
         catalogIds: selectedCatalogIds.value.length > 0 ? selectedCatalogIds.value : undefined,
-        autoAppend: autoAppend.value,
-        interleavedMode: interleavedMode.value,
+        outputMode: outputMode.value,
       })
 
       if (result?.data?.createTranslationJob) {
@@ -371,8 +404,8 @@ async function handleStartTranslation() {
 
         // Show success message
         errorHandler.showSuccess(
-          'Translation Job Started',
-          `Job ${job.id} has been created and is now processing`
+          t('job.started'),
+          t('job.startedDesc')
         )
       }
     }, 'createJob')
@@ -387,19 +420,28 @@ function handleJobComplete(job: TranslationJob) {
 
   // Show completion notification
   if (job.status === 'COMPLETED') {
-    errorHandler.showSuccess(
-      'Translation Complete',
-      `Job ${job.id} completed successfully. ${job.filesCompleted} files translated.`
-    )
+    const warnings = getFilesWithWarnings(job)
+    if (warnings.length > 0) {
+      const totalFailed = warnings.reduce((sum, f) => sum + (f.segmentsFailed ?? 0), 0)
+      errorHandler.showWarning(
+        t('job.completedWithWarnings'),
+        t('job.completedWithWarningsDesc', { filesCompleted: job.filesCompleted, failedSegments: totalFailed, warningFiles: warnings.length })
+      )
+    } else {
+      errorHandler.showSuccess(
+        t('job.completed'),
+        t('job.completedDesc', { filesCompleted: job.filesCompleted })
+      )
+    }
   } else if (job.status === 'PARTIAL_SUCCESS') {
     errorHandler.showWarning(
-      'Translation Partially Complete',
-      `Job ${job.id} completed with some errors. ${job.filesCompleted} files succeeded, ${job.filesFailed.length} failed.`
+      t('job.partialSuccess'),
+      t('job.partialSuccessDesc', { filesCompleted: job.filesCompleted, filesFailed: job.filesFailed.length })
     )
   } else if (job.status === 'FAILED') {
     errorHandler.handleError(
-      `Job ${job.id} failed. Please check the error details.`,
-      'Translation Job'
+      t('job.failedDesc'),
+      t('job.failed')
     )
   }
 
@@ -431,6 +473,13 @@ function getCompletedFiles(job: TranslationJob): Array<{ filename: string }> {
   return job.completedFiles.map(cf => ({ filename: cf.outputFilename }))
 }
 
+function getFilesWithWarnings(job: TranslationJob) {
+  if (!job.completedFiles || !Array.isArray(job.completedFiles)) {
+    return []
+  }
+  return job.completedFiles.filter(f => f.segmentsFailed && f.segmentsFailed > 0)
+}
+
 function getStatusColor(status: string): string {
   switch (status) {
     case 'COMPLETED':
@@ -448,7 +497,9 @@ function getStatusColor(status: string): string {
 
 function formatDate(dateString?: string): string {
   if (!dateString) return 'N/A'
-  return new Date(dateString).toLocaleDateString(undefined, {
+  const localeMap: Record<string, string> = { en: 'en-US', zh: 'zh-CN', vi: 'vi-VN' }
+  const locale = localeMap[language.currentLanguage.value] ?? 'en-US'
+  return new Date(dateString).toLocaleDateString(locale, {
       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   })
 }
@@ -658,13 +709,15 @@ function getDocumentIconColor(documentType?: DocumentType): string {
   border: none;
 }
 
-.job-id {
-  font-family: monospace;
-  color: var(--text-secondary);
-  font-size: 14px;
-  background: rgba(0,0,0,0.03);
-  padding: 2px 6px;
+.output-mode-tag {
+  font-size: 12px;
   border-radius: 4px;
+}
+
+.job-lang-pair {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--primary-color);
 }
 
 .job-date {
@@ -680,7 +733,7 @@ function getDocumentIconColor(documentType?: DocumentType): string {
 /* File Download Grid */
 .download-section {
   padding-top: 12px;
-  border-top: 1px solid rgba(0,0,0,0.05);
+  border-top: 1px solid var(--border-color);
 }
 
 .files-grid {
@@ -738,10 +791,10 @@ function getDocumentIconColor(documentType?: DocumentType): string {
 /* Failed Files */
 .failed-files-section {
   margin-top: 16px;
-  background: #fef2f2;
+  background: var(--error-bg);
   border-radius: 8px;
   padding: 12px;
-  border: 1px solid #fee2e2;
+  border: 1px solid var(--error-border);
 }
 
 .failed-header {
@@ -756,11 +809,43 @@ function getDocumentIconColor(documentType?: DocumentType): string {
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #b91c1c;
+  color: var(--error-text);
 }
 
 .error-icon {
   color: #ef4444;
+}
+
+.warning-files-section {
+  margin-top: 16px;
+  background: var(--warning-bg);
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px solid var(--warning-border);
+}
+
+.warning-header {
+  font-weight: 600;
+  color: #d97706;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.warning-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.warning-icon {
+  color: #d97706;
+}
+
+.warning-text {
+  color: #92400e;
+  font-size: 12px;
 }
 
 /* Responsive */
@@ -778,13 +863,24 @@ function getDocumentIconColor(documentType?: DocumentType): string {
   }
 }
 
-/* Disabled card state */
-.disabled-card {
-  opacity: 0.7;
+/* Term Catalogs sub-section */
+.term-catalogs-section {
+  margin-top: 20px;
 }
 
-.disabled-card .card-header {
-  color: var(--text-secondary);
+.sub-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.sub-header-icon {
+  color: var(--primary-color);
+  font-size: 16px;
 }
 
 .placeholder-content {

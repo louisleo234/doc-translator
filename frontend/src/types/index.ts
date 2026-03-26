@@ -130,12 +130,15 @@ export interface FileProgress {
 export interface FileError {
   filename: string
   error: string
+  errorType?: string
 }
 
 export interface CompletedFile {
   originalFilename: string
   outputFilename: string
   cellsTranslated: number
+  segmentsFailed?: number
+  translationWarning?: string
 }
 
 export interface TranslationJob {
@@ -147,8 +150,8 @@ export interface TranslationJob {
   filesProcessing: FileProgress[]
   filesFailed: FileError[]
   completedFiles: CompletedFile[]
-  autoAppend?: boolean
-  interleavedMode?: boolean  // NEW field for interleaved output mode
+  languagePair?: { sourceLanguage: string; targetLanguage: string }
+  outputMode?: OutputMode
   createdAt: string
   completedAt?: string
 }

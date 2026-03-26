@@ -67,7 +67,7 @@ See `.env.example` for a complete template with comments.
 | `RELOAD` | `false` | Auto-reload on file changes |
 | `LOG_LEVEL` | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `MAX_CONCURRENT_FILES` | `5` | Max files to process in parallel |
-| `TRANSLATION_BATCH_SIZE` | `10` | Cells/paragraphs per Bedrock API call |
+| `TRANSLATION_BATCH_SIZE` | `20` | Cells/paragraphs per Bedrock API call |
 | `MAX_FILE_SIZE` | `52428800` | Max upload file size in bytes (50MB) |
 | `FRONTEND_URL` | `http://localhost:3000` | Frontend URL for CORS |
 

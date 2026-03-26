@@ -13,7 +13,7 @@ import pytest
 import asyncio
 import json
 from unittest.mock import Mock, patch, MagicMock
-from src.services.translation_service import TranslationService
+from src.services.translation_service import TranslationService, TranslationResult
 from src.models.job import LanguagePair
 
 
@@ -65,9 +65,10 @@ class TestSystemPromptConstruction:
         
         # Verify language detection rule is present
         assert "LANGUAGE DETECTION" in prompt
-        assert "Automatically detect" in prompt
+        assert "Translate all" in prompt
         assert "Chinese" in prompt
-        assert "return it unchanged" in prompt.lower()
+        assert "return that item unchanged" in prompt.lower()
+        assert "when in doubt, always translate" in prompt.lower()
     
     def test_system_prompt_contains_english_preservation_rules(
         self,
@@ -96,7 +97,8 @@ class TestSystemPromptConstruction:
         
         # Verify mixed content rule is present
         assert "MIXED CONTENT" in prompt
-        assert "translate only" in prompt.lower()
+        assert "translate the" in prompt.lower()
+        assert "Do NOT skip" in prompt
     
     def test_system_prompt_contains_output_format_rules(
         self,
@@ -240,6 +242,66 @@ class TestJSONBatchFormatting:
         assert result is None
 
 
+class TestJSONRepair:
+    """Tests for JSON repair of malformed LLM batch responses."""
+
+    def test_repair_trailing_comma(self, mock_bedrock_client):
+        service = TranslationService()
+        text = '[{"index": 0, "translation": "Xin chào"},]'
+        result = service._repair_json(text)
+        assert result is not None
+        assert json.loads(result) == [{"index": 0, "translation": "Xin chào"}]
+
+    def test_repair_trailing_comma_in_batch_response(self, mock_bedrock_client):
+        service = TranslationService()
+        response = '[{"index": 0, "translation": "Xin chào"}, {"index": 1, "translation": "Thế giới"},]'
+        result = service._parse_batch_response(response, expected_count=2)
+        assert result is not None
+        assert result[0] == "Xin chào"
+        assert result[1] == "Thế giới"
+
+    def test_repair_truncated_response(self, mock_bedrock_client):
+        service = TranslationService()
+        text = '[{"index": 0, "translation": "Xin chào"}, {"index": 1, "translation": "Thế giới"}, {"index": 2, "translat'
+        result = service._repair_json(text)
+        assert result is not None
+        parsed = json.loads(result)
+        assert len(parsed) == 2
+
+    def test_repair_truncated_in_batch_response(self, mock_bedrock_client):
+        """Truncated response repairs to fewer items than expected, so batch parsing returns None (count mismatch)."""
+        service = TranslationService()
+        response = '[{"index": 0, "translation": "Xin chào"}, {"index": 1, "translat'
+        result = service._parse_batch_response(response, expected_count=2)
+        assert result is None
+
+    def test_repair_truncated_matches_expected(self, mock_bedrock_client):
+        """Truncated response where complete items match expected count."""
+        service = TranslationService()
+        response = '[{"index": 0, "translation": "Xin chào"}, {"index": 1, "translation": "Thế giới"}, {"index": 2, "tr'
+        result = service._parse_batch_response(response, expected_count=2)
+        assert result is not None
+        assert result[0] == "Xin chào"
+        assert result[1] == "Thế giới"
+
+    def test_repair_valid_json_passthrough(self, mock_bedrock_client):
+        service = TranslationService()
+        text = '[{"index": 0, "translation": "Xin chào"}]'
+        result = service._repair_json(text)
+        assert result is not None
+        assert json.loads(result) == [{"index": 0, "translation": "Xin chào"}]
+
+    def test_repair_unrepairable_returns_none(self, mock_bedrock_client):
+        service = TranslationService()
+        result = service._repair_json('completely broken garbage')
+        assert result is None
+
+    def test_repair_unrepairable_in_batch_response(self, mock_bedrock_client):
+        service = TranslationService()
+        result = service._parse_batch_response('completely broken garbage', expected_count=1)
+        assert result is None
+
+
 class TestTranslationServiceInitialization:
     """Tests for TranslationService initialization."""
 
@@ -279,8 +341,10 @@ class TestTranslationFunctionality:
         }
         
         result = await service.translate_text_async("你好世界", chinese_vietnamese_pair)
-        
-        assert result == 'Xin chào thế giới'
+
+        assert isinstance(result, TranslationResult)
+        assert result.text == 'Xin chào thế giới'
+        assert not result.failed
         assert mock_bedrock_client.converse.called
     
     @pytest.mark.asyncio
@@ -308,8 +372,8 @@ class TestTranslationFunctionality:
         }
         
         result = await service.translate_text_async("Hello World", chinese_vietnamese_pair)
-        
-        assert result == "Hello World"
+
+        assert result.text == "Hello World"
         # With model-based detection, the API is called and the model decides
         assert mock_bedrock_client.converse.called
     
@@ -323,8 +387,9 @@ class TestTranslationFunctionality:
         service = TranslationService()
         
         result = await service.translate_text_async("", chinese_vietnamese_pair)
-        
-        assert result == ""
+
+        assert result.text == ""
+        assert not result.failed
         assert not mock_bedrock_client.converse.called
     
     def test_translate_text_sync_wrapper(self, mock_bedrock_client, chinese_vietnamese_pair):
@@ -343,8 +408,8 @@ class TestTranslationFunctionality:
         }
         
         result = service.translate_text("你好", chinese_vietnamese_pair)
-        
-        assert result == 'Xin chào'
+
+        assert result.text == 'Xin chào'
 
 
 class TestRetryLogic:
@@ -379,8 +444,9 @@ class TestRetryLogic:
         ]
         
         result = await service.translate_text_async("你好", chinese_vietnamese_pair)
-        
-        assert result == 'Xin chào'
+
+        assert result.text == 'Xin chào'
+        assert not result.failed
         assert mock_bedrock_client.converse.call_count == 3
     
     @pytest.mark.asyncio
@@ -401,8 +467,10 @@ class TestRetryLogic:
         )
         
         result = await service.translate_text_async("你好", chinese_vietnamese_pair)
-        
-        assert result == "你好"  # Original text returned
+
+        assert result.text == "你好"  # Original text returned
+        assert result.failed is True
+        assert result.error_code == "ServiceUnavailableException"
         assert mock_bedrock_client.converse.call_count == 3  # Max retries
     
     @pytest.mark.asyncio
@@ -423,8 +491,10 @@ class TestRetryLogic:
         )
         
         result = await service.translate_text_async("你好", chinese_vietnamese_pair)
-        
-        assert result == "你好"  # Original text returned
+
+        assert result.text == "你好"  # Original text returned
+        assert result.failed is True
+        assert result.error_code == "ValidationException"
         assert mock_bedrock_client.converse.call_count == 1  # No retries
 
 
@@ -449,11 +519,12 @@ class TestBatchTranslation:
         
         texts = ["你好", "再见", "谢谢"]
         results = await service.batch_translate_async(texts, chinese_vietnamese_pair)
-        
+
         assert len(results) == 3
-        assert results[0] == 'Xin chào'
-        assert results[1] == 'Tạm biệt'
-        assert results[2] == 'Cảm ơn'
+        assert results[0].text == 'Xin chào'
+        assert results[1].text == 'Tạm biệt'
+        assert results[2].text == 'Cảm ơn'
+        assert all(not r.failed for r in results)
     
     @pytest.mark.asyncio
     async def test_batch_translate_preserves_non_source_language(
@@ -483,9 +554,9 @@ class TestBatchTranslation:
         results = await service.batch_translate_async(texts, chinese_vietnamese_pair)
         
         assert len(results) == 3
-        assert results[0] == 'Xin chào'  # Translated
-        assert results[1] == 'Hello'  # Preserved by model
-        assert results[2] == '123'  # Preserved by model
+        assert results[0].text == 'Xin chào'  # Translated
+        assert results[1].text == 'Hello'  # Preserved by model
+        assert results[2].text == '123'  # Preserved by model
     
     def test_batch_translate_sync_wrapper(self, mock_bedrock_client, chinese_vietnamese_pair):
         """Test synchronous wrapper for batch translation."""
@@ -504,9 +575,9 @@ class TestBatchTranslation:
         
         texts = ["你好"]
         results = service.batch_translate(texts, chinese_vietnamese_pair)
-        
+
         assert len(results) == 1
-        assert results[0] == 'Xin chào'
+        assert results[0].text == 'Xin chào'
     
     @pytest.mark.asyncio
     async def test_batch_translate_fallback_on_invalid_json(
@@ -559,8 +630,8 @@ class TestBatchTranslation:
         results = await service.batch_translate_async(texts, chinese_vietnamese_pair)
         
         assert len(results) == 2
-        assert results[0] == 'Xin chào'
-        assert results[1] == 'Tạm biệt'
+        assert results[0].text == 'Xin chào'
+        assert results[1].text == 'Tạm biệt'
         # Should have called API 3 times: 1 batch + 2 individual fallbacks
         assert mock_bedrock_client.converse.call_count == 3
     
@@ -588,9 +659,9 @@ class TestBatchTranslation:
         results = await service.batch_translate_async(texts, chinese_vietnamese_pair)
         
         assert len(results) == 3
-        assert results[0] == 'Xin chào'  # Translated
-        assert results[1] == ""  # Empty preserved
-        assert results[2] == "  "  # Whitespace preserved
+        assert results[0].text == 'Xin chào'  # Translated
+        assert results[1].text == ""  # Empty preserved
+        assert results[2].text == "  "  # Whitespace preserved
 
 
 class TestDynamicLanguagePairs:
@@ -660,7 +731,7 @@ class TestDynamicLanguagePairs:
         }
         
         result1 = await service.translate_text_async("你好", zh_vi_pair)
-        assert result1 == 'Xin chào'
+        assert result1.text == 'Xin chào'
         
         # Test English to Spanish
         en_es_pair = LanguagePair(
@@ -682,4 +753,4 @@ class TestDynamicLanguagePairs:
         }
         
         result2 = await service.translate_text_async("Hello", en_es_pair)
-        assert result2 == 'Hola'
+        assert result2.text == 'Hola'

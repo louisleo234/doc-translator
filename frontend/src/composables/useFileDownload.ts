@@ -15,11 +15,10 @@ export function useFileDownload() {
   const errorHandler = useErrorHandler({ showNotification: true })
   const downloads = ref<Map<string, DownloadProgress>>(new Map())
 
-  // Helper to create consistent keys
   const getKey = (jobId: string, filename: string) => `${jobId}:${filename}`
 
   /**
-   * Download a file and trigger browser download.
+   * Download a file via presigned S3 URL.
    */
   async function downloadFile(jobId: string, filename: string): Promise<void> {
     const key = getKey(jobId, filename)
@@ -27,19 +26,16 @@ export function useFileDownload() {
     downloads.value.set(key, { filename, isDownloading: true, error: null })
 
     try {
-      const blob = await api.downloadFile(jobId, filename)
+      // Get presigned S3 URL (fast, no file transfer through backend)
+      const presignedUrl = await api.getDownloadUrl(jobId, filename)
 
-      // Trigger browser download
-      const url = window.URL.createObjectURL(blob)
+      // Trigger browser download via presigned URL
       const link = document.createElement('a')
-      link.href = url
+      link.href = presignedUrl
       link.download = filename
       document.body.appendChild(link)
       link.click()
-      setTimeout(() => {
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-      }, 100)
+      document.body.removeChild(link)
 
       downloads.value.set(key, { filename, isDownloading: false, error: null })
     } catch (error) {
@@ -50,30 +46,18 @@ export function useFileDownload() {
     }
   }
 
-  /**
-   * Check if a file is currently downloading.
-   */
   function isDownloading(jobId: string, filename: string): boolean {
     return downloads.value.get(getKey(jobId, filename))?.isDownloading ?? false
   }
 
-  /**
-   * Get download state for a specific file.
-   */
   function getDownloadState(jobId: string, filename: string): DownloadProgress | null {
     return downloads.value.get(getKey(jobId, filename)) ?? null
   }
 
-  /**
-   * Clear download state for a file.
-   */
   function clearDownloadState(jobId: string, filename: string): void {
     downloads.value.delete(getKey(jobId, filename))
   }
 
-  /**
-   * Clear all download states.
-   */
   function clearAllDownloadStates(): void {
     downloads.value.clear()
   }

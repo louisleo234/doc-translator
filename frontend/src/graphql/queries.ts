@@ -29,13 +29,21 @@ export const JOB_QUERY = gql`
       filesFailed {
         filename
         error
+        errorType
       }
       completedFiles {
         originalFilename
         outputFilename
         cellsTranslated
+        segmentsFailed
+        translationWarning
       }
-      autoAppend
+      languagePair {
+        id
+        sourceLanguage
+        targetLanguage
+      }
+      outputMode
       createdAt
       completedAt
     }
@@ -72,15 +80,15 @@ export const MODEL_CONFIG_QUERY = gql`
 // Job History Query (paginated)
 export const JOB_HISTORY_QUERY = gql`
   query JobHistory(
-    $limit: Int
-    $cursor: String
+    $page: Int
+    $pageSize: Int
     $status: JobStatus
     $dateFrom: String
     $dateTo: String
   ) {
     jobHistory(
-      limit: $limit
-      cursor: $cursor
+      page: $page
+      pageSize: $pageSize
       status: $status
       dateFrom: $dateFrom
       dateTo: $dateTo
@@ -108,18 +116,22 @@ export const JOB_HISTORY_QUERY = gql`
           outputFilename
           segmentsTranslated
           documentType
+          segmentsFailed
+          translationWarning
         }
         languagePair {
           id
           sourceLanguage
           targetLanguage
         }
-        autoAppend
+        outputMode
         createdAt
         completedAt
       }
-      nextCursor
-      hasMore
+      total
+      page
+      pageSize
+      hasNext
     }
   }
 `

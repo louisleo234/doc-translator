@@ -40,7 +40,7 @@ class AppConfig:
 
         Optional (with defaults):
             MAX_CONCURRENT_FILES: 5
-            TRANSLATION_BATCH_SIZE: 10
+            TRANSLATION_BATCH_SIZE: 20
             MAX_FILE_SIZE: 52428800 (50MB)
 
         Note: Default values are mirrored in ecs/cdk.json for CDK/ECS deployments.
@@ -64,7 +64,7 @@ class AppConfig:
         if not max_files.isdigit() or int(max_files) < 1:
             errors.append("MAX_CONCURRENT_FILES must be a positive integer")
 
-        batch_size = os.getenv("TRANSLATION_BATCH_SIZE", "10")
+        batch_size = os.getenv("TRANSLATION_BATCH_SIZE", "20")
         if not batch_size.isdigit() or int(batch_size) < 1:
             errors.append("TRANSLATION_BATCH_SIZE must be a positive integer")
 

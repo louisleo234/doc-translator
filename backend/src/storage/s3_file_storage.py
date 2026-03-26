@@ -398,38 +398,68 @@ class S3FileStorage:
         """
         return await self._run_sync(self._get_output, user_id, job_id, filename)
 
-    def _generate_download_url(self, s3_key: str, expiry: int = 900) -> str:
+    def _generate_download_url(
+        self, s3_key: str, expiry: int = 900, filename: Optional[str] = None
+    ) -> str:
         """
         Generate a presigned URL for downloading a file.
 
         Args:
             s3_key: S3 key of the file.
             expiry: URL expiry time in seconds (default: 15 minutes).
+            filename: Optional filename for Content-Disposition header.
 
         Returns:
             Presigned URL string.
         """
         client = self._get_client()
+        params: dict = {"Bucket": self._bucket_name, "Key": s3_key}
+        if filename:
+            from urllib.parse import quote
+            params["ResponseContentDisposition"] = (
+                f"attachment; filename*=UTF-8''{quote(filename)}"
+            )
         url = client.generate_presigned_url(
             "get_object",
-            Params={"Bucket": self._bucket_name, "Key": s3_key},
+            Params=params,
             ExpiresIn=expiry,
         )
         self._logger.debug(f"Generated presigned URL for {s3_key}, expires in {expiry}s")
         return url
 
-    async def generate_download_url(self, s3_key: str, expiry: int = 900) -> str:
+    async def generate_download_url(
+        self, s3_key: str, expiry: int = 900, filename: Optional[str] = None
+    ) -> str:
         """
         Async generate a presigned URL for downloading a file.
 
         Args:
             s3_key: S3 key of the file.
             expiry: URL expiry time in seconds (default: 15 minutes).
+            filename: Optional filename for Content-Disposition header.
 
         Returns:
             Presigned URL string.
         """
-        return await self._run_sync(self._generate_download_url, s3_key, expiry)
+        return await self._run_sync(self._generate_download_url, s3_key, expiry, filename)
+
+    async def generate_output_download_url(
+        self, user_id: str, job_id: str, filename: str, expiry: int = 900
+    ) -> str:
+        """
+        Generate a presigned URL for downloading a translated output file.
+
+        Args:
+            user_id: User ID.
+            job_id: Job ID.
+            filename: Output filename.
+            expiry: URL expiry time in seconds (default: 15 minutes).
+
+        Returns:
+            Presigned URL string.
+        """
+        output_key = self._make_output_key(user_id, job_id, filename)
+        return await self.generate_download_url(output_key, expiry, filename)
 
     def _delete_objects(self, prefix: str) -> int:
         """

@@ -57,6 +57,20 @@
         />
       </div>
 
+      <!-- Translation Warnings (segments that failed within completed files) -->
+      <div v-if="filesWithWarnings.length > 0" class="files-section warning-section">
+        <h4>{{ t('progress.warnings', 'Warnings') }}</h4>
+        <a-alert
+          v-for="file in filesWithWarnings"
+          :key="file.originalFilename"
+          :message="file.originalFilename"
+          :description="file.translationWarning"
+          type="warning"
+          show-icon
+          class="warning-alert"
+        />
+      </div>
+
       <!-- Job Timestamps -->
       <div class="job-info">
         <a-descriptions :column="2" size="small">
@@ -120,6 +134,11 @@ const job = ref<TranslationJob | null>(null)
 const loading = ref(false)
 const error = ref<Error | null>(null)
 let pollInterval: number | null = null
+
+// Files that completed but had segment-level translation failures
+const filesWithWarnings = computed(() =>
+  (job.value?.completedFiles ?? []).filter(f => f.segmentsFailed && f.segmentsFailed > 0)
+)
 
 // Determine if we should continue polling
 const shouldPoll = computed(() => {
@@ -353,14 +372,14 @@ defineExpose({
 }
 
 .progress-stats {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .files-section {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 .files-section h4 {
@@ -381,12 +400,24 @@ defineExpose({
 }
 
 .segment-stats {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
 .error-section {
   border-top-color: #ffccc7;
+}
+
+.warning-section {
+  border-top-color: #ffe58f;
+}
+
+.warning-alert {
+  margin-bottom: 12px;
+}
+
+.warning-alert:last-child {
+  margin-bottom: 0;
 }
 
 .error-alert {
@@ -400,7 +431,7 @@ defineExpose({
 .job-info {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Loading animation */

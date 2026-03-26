@@ -8,7 +8,7 @@ export const api = {
   /**
    * Download a translated file from the server.
    */
-  async downloadFile(jobId: string, filename: string): Promise<Blob> {
+  async getDownloadUrl(jobId: string, filename: string): Promise<string> {
     const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/graphql'
     const downloadUrl = apiUrl.replace('/graphql', '/download')
     const token = localStorage.getItem('auth_token')
@@ -31,6 +31,7 @@ export const api = {
       throw new Error(error.error || `Download failed with status ${response.status}`)
     }
 
-    return response.blob()
+    const data = await response.json()
+    return data.url
   },
 }

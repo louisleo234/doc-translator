@@ -160,8 +160,7 @@ async def test_job_uses_user_preferred_model(
             info=info,
             file_ids=["file-1"],
             language_pair_id="lp-uuid-123",
-            auto_append=True,
-            interleaved_mode=False,
+            output_mode="append",
         )
 
         # Verify TranslationService was constructed with the user's preferred model
@@ -220,8 +219,7 @@ async def test_job_falls_back_to_default_when_no_settings(
             info=info,
             file_ids=["file-1"],
             language_pair_id="lp-uuid-123",
-            auto_append=True,
-            interleaved_mode=False,
+            output_mode="append",
         )
 
         # The default model was still valid, so TranslationService is created with it
@@ -279,8 +277,7 @@ async def test_job_falls_back_when_model_invalid(
             info=info,
             file_ids=["file-1"],
             language_pair_id="lp-uuid-123",
-            auto_append=True,
-            interleaved_mode=False,
+            output_mode="append",
         )
 
         # Verify TranslationService was created with the fallback model
@@ -324,8 +321,7 @@ async def test_job_uses_shared_service_when_settings_service_unavailable(
             info=info,
             file_ids=["file-1"],
             language_pair_id="lp-uuid-123",
-            auto_append=True,
-            interleaved_mode=False,
+            output_mode="append",
         )
 
         # TranslationService should NOT have been constructed (no per-job instance)

@@ -159,23 +159,17 @@ class MarkdownProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to a Markdown file, preserving structure.
-
-        Reads the original file, replaces translated line indices with
-        their translations (applying the output mode), and keeps all
-        skipped lines (code blocks, front matter, blank lines) intact.
 
         Args:
             file_path: Path to the original Markdown file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated file should be saved
-            auto_append: Whether to append translation to original text
-            interleaved_mode: Whether to interleave original and translated lines
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
 
         Returns:
             True if writing succeeded, False otherwise
@@ -192,7 +186,7 @@ class MarkdownProcessor(DocumentProcessor):
                 line_idx = seg.metadata.get("line_idx")
                 if line_idx is not None:
                     final_text = apply_output_mode(
-                        seg.text, trans, auto_append, interleaved_mode
+                        seg.text, trans, output_mode
                     )
                     translation_map[line_idx] = final_text
 

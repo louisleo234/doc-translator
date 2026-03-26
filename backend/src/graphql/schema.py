@@ -235,6 +235,8 @@ class CompletedFile:
     segments_translated: int
     document_type: Optional[DocumentType]
     cells_translated: int
+    segments_failed: int = 0
+    translation_warning: Optional[str] = None
 
 
 @strawberry.type
@@ -254,8 +256,7 @@ class TranslationJob:
         created_at: Timestamp when the job was created
         completed_at: Timestamp when the job completed (None if not completed)
         language_pair: Language pair used for translation
-        auto_append: Whether translations are appended to original text (True) or replace it (False)
-        interleaved_mode: Whether original and translated lines are interleaved line by line (True) or not (False)
+        output_mode: Output mode for translations ("replace", "append", "interleaved")
     """
     id: str
     status: JobStatus
@@ -268,8 +269,7 @@ class TranslationJob:
     created_at: datetime
     completed_at: Optional[datetime]
     language_pair: Optional[LanguagePair]
-    auto_append: bool
-    interleaved_mode: bool
+    output_mode: str
 
 
 @strawberry.type
@@ -279,12 +279,16 @@ class JobHistoryResponse:
 
     Attributes:
         jobs: List of translation jobs for the current page
-        next_cursor: Pagination cursor for the next page (None if no more pages)
-        has_more: Whether there are more jobs available
+        total: Total number of matching jobs
+        page: Current page number (1-based)
+        page_size: Number of jobs per page
+        has_next: Whether there are more pages available
     """
     jobs: List[TranslationJob]
-    next_cursor: Optional[str]
-    has_more: bool
+    total: int
+    page: int
+    page_size: int
+    has_next: bool
 
 
 @strawberry.type
@@ -447,8 +451,8 @@ class Query:
     async def job_history(
         self,
         info: Info,
-        limit: int = 20,
-        cursor: Optional[str] = None,
+        page: int = 1,
+        page_size: int = 20,
         status: Optional[JobStatus] = None,
         date_from: Optional[str] = None,
         date_to: Optional[str] = None
@@ -457,20 +461,20 @@ class Query:
         Get paginated job history for the authenticated user.
 
         Args:
-            limit: Maximum number of jobs to return (1-100, default 20)
-            cursor: Pagination cursor from previous query
+            page: Page number (1-based, default 1)
+            page_size: Number of jobs per page (1-100, default 20)
             status: Optional status filter
             date_from: Optional start date filter (ISO format)
             date_to: Optional end date filter (ISO format)
 
         Returns:
-            JobHistoryResponse: Paginated list of jobs with cursor
+            JobHistoryResponse: Paginated list of jobs
 
         Raises:
             AuthenticationError: If the user is not authenticated
         """
         from .resolvers import resolve_job_history
-        return await resolve_job_history(info, limit, cursor, status, date_from, date_to)
+        return await resolve_job_history(info, page, page_size, status, date_from, date_to)
 
     @strawberry.field
     async def language_pairs(self, info: Info) -> List[LanguagePair]:
@@ -724,33 +728,26 @@ class Mutation:
         file_ids: List[str],
         language_pair_id: str,
         catalog_ids: Optional[List[str]] = None,
-        auto_append: bool = True,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> TranslationJob:
         """
         Create a new translation job with optional catalog selection.
-        
+
         Args:
             file_ids: List of file IDs to translate
             language_pair_id: ID of the language pair to use
             catalog_ids: Optional list of catalog IDs for term injection (in priority order)
-            auto_append: Whether to append translations to original text (True) or replace (False). Defaults to True.
-            interleaved_mode: Whether to interleave original and translated lines (True) or not (False). Defaults to False.
-            
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
+
         Returns:
             TranslationJob: The created job
-            
+
         Raises:
             AuthenticationError: If the user is not authenticated
             ValidationError: If file_ids or language_pair_id are invalid
-            ValueError: If both auto_append and interleaved_mode are True (mutually exclusive)
         """
-        # Validate mutual exclusivity of output modes
-        if auto_append and interleaved_mode:
-            raise ValueError("Cannot enable both Append Mode and Interleaved Mode simultaneously")
-        
         from .resolvers import resolve_create_translation_job
-        return await resolve_create_translation_job(info, file_ids, language_pair_id, catalog_ids, auto_append, interleaved_mode)
+        return await resolve_create_translation_job(info, file_ids, language_pair_id, catalog_ids, output_mode)
     
     @strawberry.mutation
     async def add_language_pair(

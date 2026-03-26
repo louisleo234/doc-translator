@@ -241,8 +241,7 @@ def convert_translation_job(job: TranslationJob) -> GQLTranslationJob:
         created_at=job.created_at,
         completed_at=job.completed_at,
         language_pair=convert_language_pair_for_gql(job.language_pair) if job.language_pair else None,
-        auto_append=job.auto_append,
-        interleaved_mode=job.interleaved_mode
+        output_mode=job.output_mode
     )
 
 
@@ -333,8 +332,8 @@ async def resolve_jobs(info: Info) -> List[GQLTranslationJob]:
 
 async def resolve_job_history(
     info: Info,
-    limit: int = 20,
-    cursor: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
     status: Optional[GQLJobStatus] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None
@@ -344,14 +343,14 @@ async def resolve_job_history(
 
     Args:
         info: Strawberry Info object
-        limit: Maximum number of jobs to return (1-100, default 20)
-        cursor: Pagination cursor from previous query
+        page: Page number (1-based, default 1)
+        page_size: Number of jobs per page (1-100, default 20)
         status: Optional status filter (GraphQL JobStatus enum)
         date_from: Optional start date filter (ISO format string)
         date_to: Optional end date filter (ISO format string)
 
     Returns:
-        JobHistoryResponse with jobs, next_cursor, and has_more
+        JobHistoryResponse with jobs, total, page, page_size, has_next
 
     Raises:
         AuthenticationError: If user is not authenticated
@@ -365,8 +364,9 @@ async def resolve_job_history(
     # Set user context on job_store
     context.job_manager.job_store.set_user_context(username)
 
-    # Clamp limit to valid range (1-100)
-    clamped_limit = max(1, min(100, limit))
+    # Clamp page and page_size to valid ranges
+    clamped_page = max(1, page)
+    clamped_page_size = max(1, min(100, page_size))
 
     # Convert GraphQL JobStatus enum to domain JobStatus
     status_filter = None
@@ -388,9 +388,9 @@ async def resolve_job_history(
             pass  # Ignore invalid date format
 
     # Call job_store.list_jobs with parameters
-    jobs, next_cursor = await context.job_manager.job_store.list_jobs(
-        limit=clamped_limit,
-        cursor=cursor,
+    jobs, total = await context.job_manager.job_store.list_jobs(
+        page=clamped_page,
+        page_size=clamped_page_size,
         status_filter=status_filter,
         date_from=parsed_date_from,
         date_to=parsed_date_to
@@ -401,8 +401,10 @@ async def resolve_job_history(
 
     return JobHistoryResponse(
         jobs=gql_jobs,
-        next_cursor=next_cursor,
-        has_more=next_cursor is not None
+        total=total,
+        page=clamped_page,
+        page_size=clamped_page_size,
+        has_next=(clamped_page * clamped_page_size) < total
     )
 
 
@@ -535,8 +537,7 @@ async def resolve_create_translation_job(
     file_ids: List[str],
     language_pair_id: str,
     catalog_ids: Optional[List[str]] = None,
-    auto_append: bool = True,
-    interleaved_mode: bool = False
+    output_mode: str = "replace"
 ) -> GQLTranslationJob:
     """
     Create a new translation job with optional catalog selection.
@@ -546,8 +547,7 @@ async def resolve_create_translation_job(
         file_ids: List of file IDs to translate
         language_pair_id: ID of language pair to use
         catalog_ids: Optional list of catalog IDs for term injection (in priority order)
-        auto_append: Whether to append translations to original text (True) or replace (False). Defaults to True.
-        interleaved_mode: Whether to interleave original and translated lines (True) or not (False). Defaults to False.
+        output_mode: One of "replace", "append", "interleaved" (default: "replace")
 
     Returns:
         Created translation job
@@ -555,17 +555,18 @@ async def resolve_create_translation_job(
     Raises:
         AuthenticationError: If user is not authenticated
         ValidationError: If inputs are invalid
-        ValueError: If both auto_append and interleaved_mode are True (mutually exclusive)
         RuntimeError: If language_pair_service is not available
+        ValueError: If output_mode is not one of "replace", "append", "interleaved"
     """
-    # Validate mutual exclusivity of output modes (safety net - also validated in schema.py)
-    if auto_append and interleaved_mode:
-        raise ValueError("Cannot enable both Append Mode and Interleaved Mode simultaneously")
     import asyncio
     import shutil
     import tempfile
     from pathlib import Path
-    
+
+    valid_output_modes = {"replace", "append", "interleaved"}
+    if output_mode not in valid_output_modes:
+        raise ValidationError(f"Invalid output_mode: {output_mode}. Must be one of: {', '.join(sorted(valid_output_modes))}")
+
     username = require_auth(info)
 
     context: ResolverContext = info.context.get("resolver_context")
@@ -628,8 +629,8 @@ async def resolve_create_translation_job(
         shutil.rmtree(temp_input_dir, ignore_errors=True)
         raise ValidationError(f"Failed to retrieve files from storage: {str(e)}")
     
-    # Create job with auto_append and interleaved_mode settings
-    job = await context.job_manager.create_job(file_ids, language_pair, auto_append=auto_append, interleaved_mode=interleaved_mode)
+    # Create job with output_mode setting
+    job = await context.job_manager.create_job(file_ids, language_pair, output_mode=output_mode)
 
     # Create job-specific output directory (temp)
     job_output_dir = Path(tempfile.mkdtemp(prefix=f"doc-translation-output-{job.id}-"))

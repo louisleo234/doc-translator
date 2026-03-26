@@ -129,7 +129,19 @@ class WordProcessor(DocumentProcessor):
             document, segment_id
         )
         segments.extend(textbox_segments)
-        
+        segment_id += len(textbox_segments)
+
+        # Extract from structured document tags (content controls)
+        sdt_segments = self._extract_sdt_segments(document, segment_id)
+        segments.extend(sdt_segments)
+        segment_id += len(sdt_segments)
+
+        # Extract from footnotes and endnotes
+        footnote_segments = self._extract_footnote_endnote_segments(
+            document, segment_id
+        )
+        segments.extend(footnote_segments)
+
         self.logger.info(f"Extracted {len(segments)} text segments from {file_path.name}")
         return segments
     
@@ -340,7 +352,165 @@ class WordProcessor(DocumentProcessor):
                         seg.metadata["header_footer"] = "footer"
                     segments.extend(table_segments)
                     segment_id += len(table_segments)
-        
+
+        return segments
+
+    def _extract_sdt_segments(
+        self,
+        document: Document,
+        start_segment_id: int
+    ) -> List[TextSegment]:
+        """
+        Extract text segments from Structured Document Tags (content controls).
+
+        SDT elements (w:sdt) wrap content that document.paragraphs/tables skip.
+        Only processes SDTs that are direct children of the body.
+        """
+        segments = []
+        segment_id = start_segment_id
+        w_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        try:
+            body = document.element.body
+
+            # Collect IDs of elements already reachable via document.paragraphs/tables
+            known_para_ids = {id(p._element) for p in document.paragraphs}
+            known_tbl_ids = {id(t._tbl) for t in document.tables}
+
+            # Find SDT elements that are direct children of body
+            sdt_idx = 0
+            for child in body:
+                if child.tag != f'{{{w_ns}}}sdt':
+                    continue
+
+                sdt_content = child.find(f'{{{w_ns}}}sdtContent')
+                if sdt_content is None:
+                    sdt_idx += 1
+                    continue
+
+                # Extract paragraphs inside this SDT
+                para_counter = 0
+                for elem in sdt_content:
+                    if elem.tag == f'{{{w_ns}}}p':
+                        if id(elem) in known_para_ids:
+                            continue
+                        text_parts = []
+                        for t in elem.findall(f'.//{{{w_ns}}}t'):
+                            if t.text:
+                                text_parts.append(t.text)
+                        full_text = ''.join(text_parts).strip()
+                        if full_text:
+                            segment = TextSegment(
+                                id=str(segment_id),
+                                text=full_text,
+                                location=f"sdt_{sdt_idx}_paragraph_{para_counter}",
+                                metadata={
+                                    "type": "sdt_paragraph",
+                                    "sdt_idx": sdt_idx,
+                                    "paragraph_idx": para_counter,
+                                }
+                            )
+                            segments.append(segment)
+                            segment_id += 1
+                        para_counter += 1
+
+                    elif elem.tag == f'{{{w_ns}}}tbl':
+                        if id(elem) in known_tbl_ids:
+                            continue
+                        # Extract table cells at XML level
+                        tbl_idx_in_sdt = 0
+                        rows = elem.findall(f'{{{w_ns}}}tr')
+                        for row_idx, row_elem in enumerate(rows):
+                            cells = row_elem.findall(f'{{{w_ns}}}tc')
+                            for col_idx, cell_elem in enumerate(cells):
+                                cell_text_parts = []
+                                for t in cell_elem.findall(f'.//{{{w_ns}}}t'):
+                                    if t.text:
+                                        cell_text_parts.append(t.text)
+                                cell_text = ''.join(cell_text_parts).strip()
+                                if cell_text:
+                                    segment = TextSegment(
+                                        id=str(segment_id),
+                                        text=cell_text,
+                                        location=f"sdt_{sdt_idx}_table_{tbl_idx_in_sdt}_row_{row_idx}_col_{col_idx}",
+                                        metadata={
+                                            "type": "sdt_table_cell",
+                                            "sdt_idx": sdt_idx,
+                                            "table_idx": tbl_idx_in_sdt,
+                                            "row_idx": row_idx,
+                                            "col_idx": col_idx,
+                                        }
+                                    )
+                                    segments.append(segment)
+                                    segment_id += 1
+                        tbl_idx_in_sdt += 1
+
+                sdt_idx += 1
+
+        except Exception as e:
+            self.logger.warning(f"Error extracting SDT content: {e}")
+
+        return segments
+
+    def _extract_footnote_endnote_segments(
+        self,
+        document: Document,
+        start_segment_id: int
+    ) -> List[TextSegment]:
+        """Extract text segments from footnotes and endnotes."""
+        segments = []
+        segment_id = start_segment_id
+        w_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        for note_type in ("footnote", "endnote"):
+            try:
+                part_name = f"/word/{note_type}s.xml"
+                note_part = None
+                for rel in document.part.rels.values():
+                    if hasattr(rel, 'target_part') and hasattr(rel.target_part, 'partname'):
+                        if str(rel.target_part.partname) == part_name:
+                            note_part = rel.target_part
+                            break
+
+                if note_part is None:
+                    continue
+
+                from lxml import etree
+                root = etree.fromstring(note_part.blob)
+                notes = root.findall(f'{{{w_ns}}}{note_type}')
+
+                for note in notes:
+                    # Skip separator/continuation notes
+                    note_type_attr = note.get(f'{{{w_ns}}}type')
+                    if note_type_attr in ('separator', 'continuationSeparator', 'continuationNotice'):
+                        continue
+
+                    note_id = note.get(f'{{{w_ns}}}id')
+                    paragraphs = note.findall(f'{{{w_ns}}}p')
+
+                    for para_idx, para_elem in enumerate(paragraphs):
+                        text_parts = []
+                        for t in para_elem.findall(f'.//{{{w_ns}}}t'):
+                            if t.text:
+                                text_parts.append(t.text)
+                        full_text = ''.join(text_parts).strip()
+                        if full_text:
+                            segment = TextSegment(
+                                id=str(segment_id),
+                                text=full_text,
+                                location=f"{note_type}_{note_id}_paragraph_{para_idx}",
+                                metadata={
+                                    "type": note_type,
+                                    "note_id": note_id,
+                                    "paragraph_idx": para_idx,
+                                }
+                            )
+                            segments.append(segment)
+                            segment_id += 1
+
+            except Exception as e:
+                self.logger.warning(f"Error extracting {note_type}s: {e}")
+
         return segments
 
     async def _extract_textbox_segments(
@@ -365,36 +535,80 @@ class WordProcessor(DocumentProcessor):
                 'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
                 'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
                 'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+                'v': 'urn:schemas-microsoft-com:vml',
             }
-            
-            # Find text boxes using XPath
+
+            # Find text boxes using XPath (DrawingML + VML)
             textbox_contents = body.findall('.//wps:txbx/w:txbxContent', namespaces)
+            seen_ids = {id(tc) for tc in textbox_contents}
+            for tc in body.findall('.//v:textbox/w:txbxContent', namespaces):
+                if id(tc) not in seen_ids:
+                    textbox_contents.append(tc)
+                    seen_ids.add(id(tc))
             
+            w_ns = namespaces['w']
             for tb_idx, txbx_content in enumerate(textbox_contents):
-                # Extract paragraphs from text box
-                paragraphs = txbx_content.findall('.//w:p', namespaces)
-                for para_idx, para_elem in enumerate(paragraphs):
-                    # Get text from all text runs
+                # Collect element IDs of paragraphs inside tables to avoid double-counting
+                table_para_ids: Set[int] = set()
+                tables = txbx_content.findall(f'{{{w_ns}}}tbl')
+                for tbl_elem in tables:
+                    for p in tbl_elem.findall(f'.//{{{w_ns}}}p'):
+                        table_para_ids.add(id(p))
+
+                # Extract direct paragraphs from text box (skip those inside tables)
+                paragraphs = txbx_content.findall(f'.//{{{w_ns}}}p')
+                direct_para_idx = 0
+                for para_elem in paragraphs:
+                    if id(para_elem) in table_para_ids:
+                        continue
                     text_parts = []
-                    text_runs = para_elem.findall('.//w:t', namespaces)
+                    text_runs = para_elem.findall(f'.//{{{w_ns}}}t')
                     for t in text_runs:
                         if t.text:
                             text_parts.append(t.text)
-                    
+
                     full_text = ''.join(text_parts).strip()
                     if full_text:
                         segment = TextSegment(
                             id=str(segment_id),
                             text=full_text,
-                            location=f"textbox_{tb_idx}_paragraph_{para_idx}",
+                            location=f"textbox_{tb_idx}_paragraph_{direct_para_idx}",
                             metadata={
                                 "type": "textbox",
                                 "textbox_idx": tb_idx,
-                                "paragraph_idx": para_idx,
+                                "paragraph_idx": direct_para_idx,
                             }
                         )
                         segments.append(segment)
                         segment_id += 1
+                    direct_para_idx += 1
+
+                # Extract tables from text box
+                for tbl_idx, tbl_elem in enumerate(tables):
+                    rows = tbl_elem.findall(f'{{{w_ns}}}tr')
+                    for row_idx, row_elem in enumerate(rows):
+                        cells = row_elem.findall(f'{{{w_ns}}}tc')
+                        for col_idx, cell_elem in enumerate(cells):
+                            cell_text_parts = []
+                            for t in cell_elem.findall(f'.//{{{w_ns}}}t'):
+                                if t.text:
+                                    cell_text_parts.append(t.text)
+                            cell_text = ''.join(cell_text_parts).strip()
+                            if cell_text:
+                                segment = TextSegment(
+                                    id=str(segment_id),
+                                    text=cell_text,
+                                    location=f"textbox_{tb_idx}_table_{tbl_idx}_row_{row_idx}_col_{col_idx}",
+                                    metadata={
+                                        "type": "textbox_table_cell",
+                                        "textbox_idx": tb_idx,
+                                        "table_idx": tbl_idx,
+                                        "row_idx": row_idx,
+                                        "col_idx": col_idx,
+                                    }
+                                )
+                                segments.append(segment)
+                                segment_id += 1
         except Exception as e:
             self.logger.warning(f"Error extracting text boxes: {e}")
         
@@ -406,30 +620,17 @@ class WordProcessor(DocumentProcessor):
         segments: List[TextSegment],
         translations: List[str],
         output_path: Path,
-        auto_append: bool = False,
-        interleaved_mode: bool = False
+        output_mode: str = "replace"
     ) -> bool:
         """
         Write translated text back to Word document, preserving formatting.
-        
-        Output modes (mutually exclusive):
-        - Replace: translated text replaces original (default)
-        - Append: translated text appended after original (auto_append=True)
-        - Interleaved: original and translated lines interleaved (interleaved_mode=True)
-        
-        Preserves:
-        - Font properties (name, size, color, bold, italic, underline)
-        - Paragraph formatting (alignment, spacing, indentation)
-        - Table structure and cell formatting
-        - Embedded images and shapes
-        
+
         Args:
             file_path: Path to the original Word file
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated document should be saved
-            auto_append: Whether to append translation to original text (default: False)
-            interleaved_mode: Whether to interleave original and translated lines (default: False)
+            output_mode: One of "replace", "append", "interleaved" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise
@@ -443,7 +644,7 @@ class WordProcessor(DocumentProcessor):
             # Create translation map with output mode applied
             translation_map = {}
             for seg, trans in zip(segments, translations):
-                final_text = apply_output_mode(seg.text, trans, auto_append, interleaved_mode)
+                final_text = apply_output_mode(seg.text, trans, output_mode)
                 translation_map[seg.id] = final_text
             
             # Process each segment
@@ -464,6 +665,22 @@ class WordProcessor(DocumentProcessor):
                     )
                 elif seg_type == "textbox":
                     await self._write_textbox_translation(
+                        document, segment, translation
+                    )
+                elif seg_type == "textbox_table_cell":
+                    await self._write_textbox_table_cell_translation(
+                        document, segment, translation
+                    )
+                elif seg_type == "sdt_paragraph":
+                    self._write_sdt_translation(
+                        document, segment, translation
+                    )
+                elif seg_type == "sdt_table_cell":
+                    self._write_sdt_table_cell_translation(
+                        document, segment, translation
+                    )
+                elif seg_type in ("footnote", "endnote"):
+                    self._write_footnote_endnote_translation(
                         document, segment, translation
                     )
             
@@ -525,6 +742,14 @@ class WordProcessor(DocumentProcessor):
             # Complex case: multiple runs with formatting
             self._update_paragraph_text_with_runs(paragraph, translation, runs_meta)
     
+    def _clear_paragraph_content(self, paragraph: Paragraph) -> None:
+        """Remove all content elements from paragraph XML, preserving paragraph properties (w:pPr)."""
+        p_elem = paragraph._element
+        pPr = p_elem.find(qn('w:pPr'))
+        for child in list(p_elem):
+            if child is not pPr:
+                p_elem.remove(child)
+
     def _update_paragraph_text_simple(
         self,
         paragraph: Paragraph,
@@ -541,9 +766,9 @@ class WordProcessor(DocumentProcessor):
             font_name = first_run.font.name
             font_size = first_run.font.size
             
-            # Clear paragraph
-            paragraph.clear()
-            
+            # Clear paragraph (including hyperlinks/field codes for TOC entries)
+            self._clear_paragraph_content(paragraph)
+
             # Add new run with translation
             new_run = paragraph.add_run(translation)
             new_run.bold = bold
@@ -554,6 +779,8 @@ class WordProcessor(DocumentProcessor):
             if font_size:
                 new_run.font.size = font_size
         else:
+            # Clear any non-run content (e.g. hyperlinks in TOC entries)
+            self._clear_paragraph_content(paragraph)
             paragraph.add_run(translation)
     
     def _update_paragraph_text_with_runs(
@@ -575,9 +802,9 @@ class WordProcessor(DocumentProcessor):
         # Get formatting from first run
         first_run_meta = runs_meta[0]
         
-        # Clear paragraph
-        paragraph.clear()
-        
+        # Clear paragraph (including hyperlinks/field codes for TOC entries)
+        self._clear_paragraph_content(paragraph)
+
         # Add new run with translation and preserved formatting
         new_run = paragraph.add_run(translation)
         
@@ -639,18 +866,39 @@ class WordProcessor(DocumentProcessor):
         paragraphs_meta = segment.metadata.get("paragraphs", [])
         
         if cell.paragraphs:
-            # Update the first paragraph with the translation
-            first_para = cell.paragraphs[0]
-            
-            if paragraphs_meta and paragraphs_meta[0].get("runs"):
-                runs_meta = paragraphs_meta[0]["runs"]
-                self._update_paragraph_text_with_runs(first_para, translation, runs_meta)
-            else:
-                self._update_paragraph_text_simple(first_para, translation)
-            
-            # Clear any additional paragraphs (translation is consolidated)
-            for para in cell.paragraphs[1:]:
-                para.clear()
+            # Split translation into lines to preserve multi-paragraph structure
+            translated_lines = translation.split('\n') if '\n' in translation else [translation]
+            cell_paras = cell.paragraphs
+
+            for i, para in enumerate(cell_paras):
+                if i < len(translated_lines):
+                    # Find matching formatting from paragraphs_meta
+                    runs_meta = []
+                    if paragraphs_meta:
+                        # Match by para_idx stored in metadata
+                        for pm in paragraphs_meta:
+                            if pm.get("para_idx") == i:
+                                runs_meta = pm.get("runs", [])
+                                break
+                        # Fallback: use positional match
+                        if not runs_meta and i < len(paragraphs_meta):
+                            runs_meta = paragraphs_meta[i].get("runs", [])
+
+                    if runs_meta:
+                        self._update_paragraph_text_with_runs(para, translated_lines[i], runs_meta)
+                    else:
+                        self._update_paragraph_text_simple(para, translated_lines[i])
+                else:
+                    # More paragraphs than translated lines -- clear extras
+                    para.clear()
+
+            # If more translated lines than paragraphs, append overflow to last paragraph
+            if len(translated_lines) > len(cell_paras):
+                overflow = '\n'.join(translated_lines[len(cell_paras):])
+                last_para = cell_paras[-1]
+                current_text = last_para.text
+                combined = current_text + '\n' + overflow if current_text else overflow
+                self._update_paragraph_text_simple(last_para, combined)
     
     def _find_table(
         self,
@@ -769,22 +1017,40 @@ class WordProcessor(DocumentProcessor):
             namespaces = {
                 'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
                 'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+                'v': 'urn:schemas-microsoft-com:vml',
             }
-            
+
             textbox_contents = body.findall('.//wps:txbx/w:txbxContent', namespaces)
+            seen_ids = {id(tc) for tc in textbox_contents}
+            for tc in body.findall('.//v:textbox/w:txbxContent', namespaces):
+                if id(tc) not in seen_ids:
+                    textbox_contents.append(tc)
+                    seen_ids.add(id(tc))
             
             if textbox_idx >= len(textbox_contents):
                 self.logger.warning(f"Textbox index {textbox_idx} out of range")
                 return
             
             txbx_content = textbox_contents[textbox_idx]
-            paragraphs = txbx_content.findall('.//w:p', namespaces)
-            
-            if para_idx >= len(paragraphs):
+            w_ns = namespaces['w']
+
+            # Collect paragraphs inside tables to skip them (match extraction logic)
+            table_para_ids: Set[int] = set()
+            for tbl in txbx_content.findall(f'{{{w_ns}}}tbl'):
+                for p in tbl.findall(f'.//{{{w_ns}}}p'):
+                    table_para_ids.add(id(p))
+
+            # Get only direct (non-table) paragraphs
+            direct_paragraphs = [
+                p for p in txbx_content.findall(f'.//{{{w_ns}}}p')
+                if id(p) not in table_para_ids
+            ]
+
+            if para_idx >= len(direct_paragraphs):
                 self.logger.warning(f"Paragraph index {para_idx} out of range in textbox {textbox_idx}")
                 return
-            
-            para_elem = paragraphs[para_idx]
+
+            para_elem = direct_paragraphs[para_idx]
             
             # Find all text runs and update them
             text_runs = para_elem.findall('.//w:t', namespaces)
@@ -797,6 +1063,213 @@ class WordProcessor(DocumentProcessor):
                     
         except Exception as e:
             self.logger.warning(f"Error writing to textbox: {e}")
+
+    async def _write_textbox_table_cell_translation(
+        self,
+        document: Document,
+        segment: TextSegment,
+        translation: str
+    ) -> None:
+        """Write translation to a table cell inside a text box."""
+        textbox_idx = segment.metadata.get("textbox_idx", 0)
+        table_idx = segment.metadata.get("table_idx", 0)
+        row_idx = segment.metadata.get("row_idx", 0)
+        col_idx = segment.metadata.get("col_idx", 0)
+
+        try:
+            body = document.element.body
+            namespaces = {
+                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+                'v': 'urn:schemas-microsoft-com:vml',
+            }
+            w_ns = namespaces['w']
+
+            textbox_contents = body.findall('.//wps:txbx/w:txbxContent', namespaces)
+            seen_ids = {id(tc) for tc in textbox_contents}
+            for tc in body.findall('.//v:textbox/w:txbxContent', namespaces):
+                if id(tc) not in seen_ids:
+                    textbox_contents.append(tc)
+                    seen_ids.add(id(tc))
+
+            if textbox_idx >= len(textbox_contents):
+                self.logger.warning(f"Textbox index {textbox_idx} out of range")
+                return
+
+            txbx_content = textbox_contents[textbox_idx]
+            tables = txbx_content.findall(f'{{{w_ns}}}tbl')
+
+            if table_idx >= len(tables):
+                self.logger.warning(f"Table index {table_idx} out of range in textbox {textbox_idx}")
+                return
+
+            tbl_elem = tables[table_idx]
+            rows = tbl_elem.findall(f'{{{w_ns}}}tr')
+            if row_idx >= len(rows):
+                return
+            cells = rows[row_idx].findall(f'{{{w_ns}}}tc')
+            if col_idx >= len(cells):
+                return
+
+            cell_elem = cells[col_idx]
+            text_runs = cell_elem.findall(f'.//{{{w_ns}}}t')
+            if text_runs:
+                text_runs[0].text = translation
+                for t in text_runs[1:]:
+                    t.text = ""
+
+        except Exception as e:
+            self.logger.warning(f"Error writing to textbox table cell: {e}")
+
+    def _write_sdt_translation(
+        self,
+        document: Document,
+        segment: TextSegment,
+        translation: str
+    ) -> None:
+        """Write translation to a paragraph inside an SDT content control."""
+        sdt_idx = segment.metadata.get("sdt_idx", 0)
+        para_idx = segment.metadata.get("paragraph_idx", 0)
+        w_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        try:
+            body = document.element.body
+            sdt_elements = [
+                child for child in body
+                if child.tag == f'{{{w_ns}}}sdt'
+            ]
+
+            if sdt_idx >= len(sdt_elements):
+                self.logger.warning(f"SDT index {sdt_idx} out of range")
+                return
+
+            sdt_content = sdt_elements[sdt_idx].find(f'{{{w_ns}}}sdtContent')
+            if sdt_content is None:
+                return
+
+            paragraphs = [
+                elem for elem in sdt_content
+                if elem.tag == f'{{{w_ns}}}p'
+            ]
+
+            if para_idx >= len(paragraphs):
+                self.logger.warning(f"Paragraph index {para_idx} out of range in SDT {sdt_idx}")
+                return
+
+            para_elem = paragraphs[para_idx]
+            text_runs = para_elem.findall(f'.//{{{w_ns}}}t')
+            if text_runs:
+                text_runs[0].text = translation
+                for t in text_runs[1:]:
+                    t.text = ""
+            else:
+                # No existing runs; add one
+                from lxml import etree
+                r_elem = etree.SubElement(para_elem, f'{{{w_ns}}}r')
+                t_elem = etree.SubElement(r_elem, f'{{{w_ns}}}t')
+                t_elem.text = translation
+
+        except Exception as e:
+            self.logger.warning(f"Error writing to SDT paragraph: {e}")
+
+    def _write_sdt_table_cell_translation(
+        self,
+        document: Document,
+        segment: TextSegment,
+        translation: str
+    ) -> None:
+        """Write translation to a table cell inside an SDT content control."""
+        sdt_idx = segment.metadata.get("sdt_idx", 0)
+        table_idx = segment.metadata.get("table_idx", 0)
+        row_idx = segment.metadata.get("row_idx", 0)
+        col_idx = segment.metadata.get("col_idx", 0)
+        w_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        try:
+            body = document.element.body
+            sdt_elements = [
+                child for child in body
+                if child.tag == f'{{{w_ns}}}sdt'
+            ]
+
+            if sdt_idx >= len(sdt_elements):
+                return
+
+            sdt_content = sdt_elements[sdt_idx].find(f'{{{w_ns}}}sdtContent')
+            if sdt_content is None:
+                return
+
+            tables = [
+                elem for elem in sdt_content
+                if elem.tag == f'{{{w_ns}}}tbl'
+            ]
+
+            if table_idx >= len(tables):
+                return
+
+            tbl_elem = tables[table_idx]
+            rows = tbl_elem.findall(f'{{{w_ns}}}tr')
+            if row_idx >= len(rows):
+                return
+            cells = rows[row_idx].findall(f'{{{w_ns}}}tc')
+            if col_idx >= len(cells):
+                return
+
+            cell_elem = cells[col_idx]
+            text_runs = cell_elem.findall(f'.//{{{w_ns}}}t')
+            if text_runs:
+                text_runs[0].text = translation
+                for t in text_runs[1:]:
+                    t.text = ""
+
+        except Exception as e:
+            self.logger.warning(f"Error writing to SDT table cell: {e}")
+
+    def _write_footnote_endnote_translation(
+        self,
+        document: Document,
+        segment: TextSegment,
+        translation: str
+    ) -> None:
+        """Write translation to a footnote or endnote."""
+        note_type = segment.metadata.get("type")  # "footnote" or "endnote"
+        note_id = segment.metadata.get("note_id")
+        para_idx = segment.metadata.get("paragraph_idx", 0)
+        w_ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        try:
+            part_name = f"/word/{note_type}s.xml"
+            note_part = None
+            for rel in document.part.rels.values():
+                if hasattr(rel, 'target_part') and hasattr(rel.target_part, 'partname'):
+                    if str(rel.target_part.partname) == part_name:
+                        note_part = rel.target_part
+                        break
+
+            if note_part is None:
+                return
+
+            from lxml import etree
+            root = etree.fromstring(note_part.blob)
+            notes = root.findall(f'{{{w_ns}}}{note_type}')
+
+            for note in notes:
+                if note.get(f'{{{w_ns}}}id') == note_id:
+                    paragraphs = note.findall(f'{{{w_ns}}}p')
+                    if para_idx < len(paragraphs):
+                        para_elem = paragraphs[para_idx]
+                        text_runs = para_elem.findall(f'.//{{{w_ns}}}t')
+                        if text_runs:
+                            text_runs[0].text = translation
+                            for t in text_runs[1:]:
+                                t.text = ""
+                    break
+
+            # Write modified XML back to part
+            note_part._blob = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+        except Exception as e:
+            self.logger.warning(f"Error writing to {note_type}: {e}")
 
     async def validate_file(self, file_path: Path) -> tuple[bool, Optional[str]]:
         """
