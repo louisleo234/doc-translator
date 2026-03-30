@@ -1,0 +1,61 @@
+name: CI Tests
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          uv sync --frozen
+
+      - name: Run tests
+        id: tests
+        run: |
+          cd backend
+          uv run pytest tests/ -v --tb=short 2>&1 | tee test_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Notify WeChat - test result
+        if: always()
+        run: |
+          EXIT_CODE=${{ steps.tests.outputs.exit_code }}
+          if [ "$EXIT_CODE" = "0" ] || [ -z "$EXIT_CODE" ]; then
+            STATUS="✅ 测试通过"
+            COLOR_NOTE="可以安全合并并部署"
+          else
+            STATUS="❌ 测试失败"
+            COLOR_NOTE="请检查后再合并"
+          fi
+
+          # Get test summary from output
+          SUMMARY=$(tail -5 backend/test_output.txt 2>/dev/null || echo "无法获取测试摘要")
+
+          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"content\": \"## 🧪 CI 测试结果\n\n**项目**: sgp-doc-translation\n**PR**: ${{ github.event.pull_request.title }}\n**状态**: $STATUS\n**说明**: $COLOR_NOTE\n\n> [查看详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
+              }
+            }"
