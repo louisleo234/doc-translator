@@ -21,7 +21,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ap-southeast-1
+          aws-region: ${{ vars.AWS_REGION }}
 
       - name: Set up Node.js for CDK
         uses: actions/setup-node@v4
@@ -49,12 +49,12 @@ jobs:
         run: |
           cd ecs
           npx cdk deploy \
-            -c s3Bucket=awssgp-infra-doc-translation \
+            -c s3Bucket=${{ vars.S3_BUCKET }} \
             -c "jwtSecret=${{ secrets.JWT_SECRET }}" \
-            -c region=ap-southeast-1 \
+            -c region=${{ vars.AWS_REGION }} \
             -c enableInternalAlb=true \
-            -c vpcCidr=172.24.252.0/22 \
-            -c "internalAlbSourceCidr=192.168.0.0/16,172.16.0.0/12,172.17.0.0/16,172.21.0.0/22,10.13.0.0/16,10.30.0.0/16,10.32.0.0/12,10.49.0.0/16,10.64.0.0/10,10.128.0.0/16" \
+            -c vpcCidr=${{ vars.VPC_CIDR }} \
+            -c "internalAlbSourceCidr=${{ vars.INTERNAL_ALB_SOURCE_CIDR }}" \
             --require-approval never \
             --outputs-file cdk-outputs.json 2>&1 | tee deploy_output.txt
           echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
@@ -67,16 +67,13 @@ jobs:
             -d "{
               \"msgtype\": \"markdown\",
               \"markdown\": {
-                \"content\": \"## ✅ 部署成功\n\n**项目**: sgp-doc-translation\n**Commit**: \`$(echo '${{ github.sha }}' | cut -c1-7)\`\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**访问地址**:\n- 公网: http://DocTra-Alb16-vM4CtoSmyl4r-199265800.ap-southeast-1.elb.amazonaws.com\n- 内网: http://internal-DocTra-Inter-nuBOohDxM4ql-1808325235.ap-southeast-1.elb.amazonaws.com\n\n> [查看部署详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
+                \"content\": \"## ✅ 部署成功\n\n**项目**: sgp-doc-translation\n**Commit**: \`$(echo '${{ github.sha }}' | cut -c1-7)\`\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**访问地址**:\n- 公网: http://${{ vars.PUBLIC_ALB_DNS }}\n- 内网: http://${{ vars.INTERNAL_ALB_DNS }}\n\n> [查看部署详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
               }
             }"
 
       - name: Notify WeChat - deploy failed
         if: steps.deploy.outputs.exit_code != '0'
         run: |
-          # Get last 20 lines of deploy output for context
-          TAIL=$(tail -20 ecs/deploy_output.txt 2>/dev/null | tr '\n' ' ' | sed 's/"/\\"/g')
-
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d "{
