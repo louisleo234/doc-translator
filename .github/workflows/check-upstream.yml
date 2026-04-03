@@ -54,33 +54,29 @@ jobs:
 
           BRANCH="sync/upstream-$(date +%Y%m%d)"
 
-          # Create sync branch
+          # Delete remote branch if already exists (retry safety)
+          git push origin --delete $BRANCH 2>/dev/null || true
+
+          # Create sync branch and merge
           git checkout -b $BRANCH
           git merge upstream/main --no-edit
 
           # Push branch
           git push origin $BRANCH
 
-          # Create PR via GitHub CLI
-          gh pr create \
-            --title "chore: sync upstream updates $(date +%Y-%m-%d)" \
-            --body "## Upstream Updates Detected
+          # Create PR via REST API (GraphQL createPullRequest blocked for schedule triggers)
+          PR_BODY="## Upstream Updates Detected\n\nAuto-synced from [freewine/doc-translator](https://github.com/freewine/doc-translator).\n\n### New Commits\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n### Next Steps\n1. Review changes above\n2. Merge this PR to trigger CI + Deploy"
 
-          Auto-synced from [freewine/doc-translator](https://github.com/freewine/doc-translator).
-
-          ### New Commits
-          \`\`\`
-          ${{ steps.check.outputs.new_commits }}
-          \`\`\`
-
-          ### Next Steps
-          1. Review changes above
-          2. Merge this PR to trigger CI + Deploy
-          " \
-            --base main \
-            --head $BRANCH
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "{
+              \"title\": \"chore: sync upstream updates $(date +%Y-%m-%d)\",
+              \"body\": \"$PR_BODY\",
+              \"head\": \"$BRANCH\",
+              \"base\": \"main\"
+            }"
 
       - name: Notify WeChat - updates found
         if: steps.check.outputs.has_updates == 'true'
