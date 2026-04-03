@@ -39,13 +39,15 @@ class TestS3FileStorageInitialization:
         storage = S3FileStorage(bucket_name="explicit-bucket")
         assert storage._bucket_name == "explicit-bucket"
 
-    def test_init_with_endpoint_url(self):
-        """Test initialization with custom endpoint URL for local testing."""
+    def test_init_with_explicit_bucket_and_logger(self):
+        """Test initialization with explicit bucket and custom logger."""
+        import logging
+        logger = logging.getLogger("test")
         storage = S3FileStorage(
             bucket_name="test-bucket",
-            endpoint_url="http://localhost:4566"
+            logger_instance=logger,
         )
-        assert storage._endpoint_url == "http://localhost:4566"
+        assert storage._bucket_name == "test-bucket"
 
 
 class TestS3FileStorageUpload:
@@ -346,6 +348,45 @@ class TestS3FileStoragePresignedUrl:
             "get_object",
             Params={"Bucket": "test-bucket", "Key": s3_key},
             ExpiresIn=7200
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_download_url_with_filename(self, storage, mock_s3_client):
+        """Test presigned URL includes Content-Disposition when filename is provided."""
+        s3_key = "user-123/outputs/job-789/translated.xlsx"
+        mock_s3_client.generate_presigned_url.return_value = "https://example.com/..."
+
+        url = await storage.generate_download_url(s3_key, filename="report.xlsx")
+
+        assert url == "https://example.com/..."
+        mock_s3_client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={
+                "Bucket": "test-bucket",
+                "Key": s3_key,
+                "ResponseContentDisposition": "attachment; filename*=UTF-8''report.xlsx",
+            },
+            ExpiresIn=900
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_output_download_url(self, storage, mock_s3_client):
+        """Test generate_output_download_url builds correct key and includes filename."""
+        mock_s3_client.generate_presigned_url.return_value = "https://example.com/..."
+
+        url = await storage.generate_output_download_url(
+            "user-123", "job-789", "translated.xlsx"
+        )
+
+        assert url == "https://example.com/..."
+        mock_s3_client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={
+                "Bucket": "test-bucket",
+                "Key": "user-123/outputs/job-789/translated.xlsx",
+                "ResponseContentDisposition": "attachment; filename*=UTF-8''translated.xlsx",
+            },
+            ExpiresIn=900
         )
 
 
