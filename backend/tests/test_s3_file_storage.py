@@ -39,14 +39,6 @@ class TestS3FileStorageInitialization:
         storage = S3FileStorage(bucket_name="explicit-bucket")
         assert storage._bucket_name == "explicit-bucket"
 
-    def test_init_with_endpoint_url(self):
-        """Test initialization with custom endpoint URL for local testing."""
-        storage = S3FileStorage(
-            bucket_name="test-bucket",
-            endpoint_url="http://localhost:4566"
-        )
-        assert storage._endpoint_url == "http://localhost:4566"
-
 
 class TestS3FileStorageUpload:
     """Tests for file upload operations."""

@@ -30,7 +30,7 @@ class TestJobStoreInitialization:
 
     def test_init_accepts_custom_repository(self):
         """Test JobStore accepts a custom JobRepository."""
-        custom_repo = JobRepository(endpoint_url="http://localhost:8000")
+        custom_repo = JobRepository()
         store = JobStore(repository=custom_repo)
         assert store._repository is custom_repo
 
