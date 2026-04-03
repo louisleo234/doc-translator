@@ -13,9 +13,6 @@ permissions:
 jobs:
   check-upstream:
     runs-on: ubuntu-latest
-    outputs:
-      has_updates: ${{ steps.check.outputs.has_updates }}
-      new_commits: ${{ steps.check.outputs.new_commits }}
 
     steps:
       - name: Checkout fork
@@ -35,7 +32,6 @@ jobs:
           NEW_COMMITS=$(git log main..upstream/main --oneline)
           if [ -n "$NEW_COMMITS" ]; then
             echo "has_updates=true" >> $GITHUB_OUTPUT
-            # escape newlines for output
             NEW_COMMITS_ESCAPED="${NEW_COMMITS//$'\n'/'\\n'}"
             echo "new_commits=$NEW_COMMITS_ESCAPED" >> $GITHUB_OUTPUT
             echo "Found new commits:"
@@ -45,52 +41,76 @@ jobs:
             echo "No new commits from upstream"
           fi
 
-      - name: Create PR if updates found
+      - name: Prepare sync branch
         if: steps.check.outputs.has_updates == 'true'
         run: |
-          # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           BRANCH="sync/upstream-$(date +%Y%m%d)"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
-          # Delete remote branch if already exists (retry safety)
+          # Delete remote branch if exists (retry safety)
           git push origin --delete $BRANCH 2>/dev/null || true
 
-          # Create sync branch and merge
           git checkout -b $BRANCH
           git merge upstream/main --no-edit
 
-          # Push branch
-          git push origin $BRANCH
-
-          # Create PR via REST API (GraphQL createPullRequest blocked for schedule triggers)
-          PR_BODY="## Upstream Updates Detected\n\nAuto-synced from [freewine/doc-translator](https://github.com/freewine/doc-translator).\n\n### New Commits\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n### Next Steps\n1. Review changes above\n2. Merge this PR to trigger CI + Deploy"
-
-          curl -s -X POST \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}/pulls" \
-            -d "{
-              \"title\": \"chore: sync upstream updates $(date +%Y-%m-%d)\",
-              \"body\": \"$PR_BODY\",
-              \"head\": \"$BRANCH\",
-              \"base\": \"main\"
-            }"
-
-      - name: Notify WeChat - updates found
+      - name: Set up Python & run tests
         if: steps.check.outputs.has_updates == 'true'
+        id: tests
+        run: |
+          pip install uv -q
+          cd backend
+          uv sync --frozen -q
+          uv run pytest tests/ -q --tb=short 2>&1 | tee test_output.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+
+      - name: Auto-merge to main (tests passed)
+        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code == '0'
+        run: |
+          git checkout main
+          git merge $BRANCH --no-edit
+          git push origin main
+
+      - name: Notify WeChat - auto deployed
+        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code == '0'
         run: |
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
             -d "{
               \"msgtype\": \"markdown\",
               \"markdown\": {
-                \"content\": \"## 📦 上游有新更新\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC+8\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 已自动创建 PR，请前往 GitHub 确认并合并以触发部署。\n> [查看 PR](https://github.com/louisleo234/doc-translator/pulls)\"
+                \"content\": \"## ✅ 上游更新已自动同步部署\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 单测通过，已自动合并并触发部署流水线。\"
               }
             }"
 
-      - name: Notify WeChat - no updates
-        if: steps.check.outputs.has_updates == 'false'
+      - name: Create PR (tests failed - needs manual review)
+        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code != '0'
         run: |
-          echo "No updates, skipping WeChat notification"
+          git push origin $BRANCH
+
+          TAIL=$(tail -20 backend/test_output.txt 2>/dev/null | tr '\n' '\\n' | sed 's/"/\\"/g')
+
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "{
+              \"title\": \"chore: sync upstream updates $(date +%Y-%m-%d) [TEST FAILED]\",
+              \"body\": \"## ⚠️ 上游更新 - 单测失败，需人工处理\n\n### New Commits\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n### 测试失败摘要\n\`\`\`\n$TAIL\n\`\`\`\",
+              \"head\": \"$BRANCH\",
+              \"base\": \"main\"
+            }"
+
+      - name: Notify WeChat - test failed needs review
+        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code != '0'
+        run: |
+          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"content\": \"## ⚠️ 上游有更新但单测失败\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 已自动建 PR，请人工检查后合并。\n> [查看 PR](https://github.com/louisleo234/doc-translator/pulls)\"
+              }
+            }"
