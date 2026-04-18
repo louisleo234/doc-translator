@@ -65,7 +65,26 @@ class TranslationService:
         except Exception as e:
             self.logger.error(f"Failed to initialize Bedrock client: {str(e)}")
             raise
-    
+
+    def filter_relevant_terms(
+        self,
+        texts: List[str],
+        term_pairs: List["TermPair"],
+        max_terms: int = 200,
+    ) -> List["TermPair"]:
+        """Filter term pairs to only those whose source_term appears in the texts."""
+        if not texts or not term_pairs:
+            return []
+
+        combined_text = "\n".join(texts)
+        relevant = [tp for tp in term_pairs if tp.source_term in combined_text]
+
+        if len(relevant) > max_terms:
+            relevant.sort(key=lambda tp: len(tp.source_term), reverse=True)
+            relevant = relevant[:max_terms]
+
+        return relevant
+
     def _build_system_prompt(
         self,
         language_pair: LanguagePair,
