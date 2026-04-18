@@ -456,7 +456,17 @@ class TranslationOrchestrator:
             
             # Extract text values for translation
             text_values = [segment.text for segment in segments]
-            
+
+            # Stage 1: filter terms to document-relevant subset
+            doc_relevant_terms = term_pairs
+            if term_pairs:
+                doc_relevant_terms = self.translation_service.filter_relevant_terms(
+                    text_values, term_pairs
+                )
+                self.logger.info(
+                    f"Term filtering: {len(term_pairs)} total -> {len(doc_relevant_terms)} relevant to document"
+                )
+
             # Batch translate with incremental progress updates
             self.logger.info(f"Translating {total_segments} segments...")
             batch_size = self.translation_service.batch_size
@@ -471,7 +481,7 @@ class TranslationOrchestrator:
                 batch_translations = await self.translation_service.batch_translate_async(
                     batch,
                     language_pair,
-                    term_pairs
+                    doc_relevant_terms
                 )
                 combined_translations.extend(batch_translations)
                 
