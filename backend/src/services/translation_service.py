@@ -513,6 +513,13 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                 batch_texts, term_pairs
             ) if term_pairs else None
 
+            if term_pairs:
+                self.logger.debug(
+                    f"Batch {i // self.batch_size + 1}: "
+                    f"{len(term_pairs)} doc-relevant terms -> "
+                    f"{len(batch_relevant_terms) if batch_relevant_terms else 0} batch-relevant"
+                )
+
             system_prompt = self._build_system_prompt(
                 language_pair, is_batch=True, term_pairs=batch_relevant_terms
             )
