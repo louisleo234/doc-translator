@@ -508,8 +508,14 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
             # Format request as JSON array with indices
             json_request = self._format_batch_request(batch_texts)
 
-            # Build system prompt with batch mode enabled and term pairs
-            system_prompt = self._build_system_prompt(language_pair, is_batch=True, term_pairs=term_pairs)
+            # Stage 2: filter terms to batch-relevant subset
+            batch_relevant_terms = self.filter_relevant_terms(
+                batch_texts, term_pairs
+            ) if term_pairs else None
+
+            system_prompt = self._build_system_prompt(
+                language_pair, is_batch=True, term_pairs=batch_relevant_terms
+            )
 
             try:
                 messages = [
@@ -540,7 +546,12 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                     )
                     batch_results: List[TranslationResult] = [TranslationResult(text=t) for t in batch]
                     for original_idx, text in batch_with_indices:
-                        batch_results[original_idx] = await self.translate_text_async(text, language_pair, term_pairs)
+                        fallback_terms = self.filter_relevant_terms(
+                            [text], term_pairs
+                        ) if term_pairs else None
+                        batch_results[original_idx] = await self.translate_text_async(
+                            text, language_pair, fallback_terms
+                        )
                     results.extend(batch_results)
                 else:
                     # Map translations back to original positions
@@ -563,7 +574,12 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                 batch_results = [TranslationResult(text=t) for t in batch]
                 for original_idx, text in batch_with_indices:
                     # translate_text_async returns TranslationResult with error info
-                    batch_results[original_idx] = await self.translate_text_async(text, language_pair, term_pairs)
+                    fallback_terms = self.filter_relevant_terms(
+                        [text], term_pairs
+                    ) if term_pairs else None
+                    batch_results[original_idx] = await self.translate_text_async(
+                        text, language_pair, fallback_terms
+                    )
                 results.extend(batch_results)
 
         return results

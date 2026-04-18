@@ -98,3 +98,53 @@ class TestFilterRelevantTerms:
 
         assert len(result) == 1
         assert result[0].source_term == "API网关"
+
+
+class TestBatchLevelTermFiltering:
+    async def test_each_batch_gets_its_own_filtered_terms(self, mock_bedrock_client):
+        """When batch_translate_async processes two batches, each should get only relevant terms."""
+        service = TranslationService(batch_size=2)
+
+        terms = [_tp("服务器", "máy chủ"), _tp("数据库", "cơ sở dữ liệu")]
+
+        from src.models.job import LanguagePair
+        lp = LanguagePair(
+            id="zh-vi", source_language="Chinese", target_language="Vietnamese",
+            source_language_code="zh", target_language_code="vi",
+        )
+
+        # Mock: capture system prompts from each batch call
+        captured_prompts = []
+        original_build = service._build_system_prompt
+
+        def capturing_build(*args, **kwargs):
+            prompt = original_build(*args, **kwargs)
+            captured_prompts.append(prompt)
+            return prompt
+
+        service._build_system_prompt = capturing_build
+
+        # Mock Bedrock to return valid responses
+        service.bedrock_client.converse.side_effect = [
+            {
+                "output": {"message": {"content": [
+                    {"text": '[{"index": 0, "translation": "t1"}, {"index": 1, "translation": "t2"}]'}
+                ]}}
+            },
+            {
+                "output": {"message": {"content": [
+                    {"text": '[{"index": 0, "translation": "t3"}]'}
+                ]}}
+            },
+        ]
+
+        texts = ["升级服务器", "检查服务器", "备份数据库"]
+        await service.batch_translate_async(texts, lp, terms)
+
+        assert len(captured_prompts) == 2
+        # Batch 1: "服务器" texts -> only 服务器 term
+        assert "服务器" in captured_prompts[0]
+        assert "数据库" not in captured_prompts[0]
+        # Batch 2: "数据库" text -> only 数据库 term
+        assert "数据库" in captured_prompts[1]
+        assert "服务器" not in captured_prompts[1]
