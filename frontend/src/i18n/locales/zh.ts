@@ -217,7 +217,7 @@ export default {
     selectedCatalogs: '已选择',
     dragToReorder: '（拖动调整优先级）',
     totalTermsSelected: '术语总数',
-    termLimitWarning: '仅使用前200个术语',
+    termLimitWarning: '仅匹配到的术语会注入提示词',
     termCatalogs: '术语目录'
   },
 

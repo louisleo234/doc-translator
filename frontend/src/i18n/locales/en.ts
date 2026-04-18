@@ -217,7 +217,7 @@ export default {
     selectedCatalogs: 'Selected',
     dragToReorder: '(drag to reorder priority)',
     totalTermsSelected: 'Total terms',
-    termLimitWarning: 'Only first 200 terms will be used',
+    termLimitWarning: 'Only matching terms will be injected into prompt',
     termCatalogs: 'Term Catalogs'
   },
 

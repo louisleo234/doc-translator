@@ -217,7 +217,7 @@ export default {
     selectedCatalogs: 'Đã chọn',
     dragToReorder: '(kéo để sắp xếp ưu tiên)',
     totalTermsSelected: 'Tổng thuật ngữ',
-    termLimitWarning: 'Chỉ sử dụng 200 thuật ngữ đầu tiên',
+    termLimitWarning: 'Chỉ các thuật ngữ khớp mới được đưa vào prompt',
     termCatalogs: 'Danh mục thuật ngữ'
   },
 
