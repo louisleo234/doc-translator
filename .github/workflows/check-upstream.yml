@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   check-upstream:
@@ -43,6 +44,7 @@ jobs:
 
       - name: Prepare sync branch
         if: steps.check.outputs.has_updates == 'true'
+        id: prepare
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -54,68 +56,109 @@ jobs:
           git push origin --delete $BRANCH 2>/dev/null || true
 
           git checkout -b $BRANCH
-          git merge upstream/main --no-edit
 
-      - name: Set up Python & run tests
-        if: steps.check.outputs.has_updates == 'true'
-        id: tests
-        run: |
-          pip install uv -q
-          cd backend
-          uv sync --extra dev -q
-          uv run pytest tests/ -q --tb=short 2>&1 | tee test_output.txt
-          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          # Attempt merge, capture result without aborting on failure
+          if git merge upstream/main --no-edit; then
+            echo "merge_ok=true" >> $GITHUB_OUTPUT
+          else
+            # Commit conflict markers so branch can be pushed for manual review
+            git add -A
+            git commit -m "chore: upstream sync $(date +%Y-%m-%d) - CONFLICTS need manual resolution"
+            echo "merge_ok=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Auto-merge to main (tests passed)
-        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code == '0'
-        run: |
-          git checkout main
-          git merge $BRANCH --no-edit
-          git push origin main
-
-      - name: Notify WeChat - auto deployed
-        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code == '0'
-        run: |
-          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"content\": \"## ✅ 上游更新已自动同步部署\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 单测通过，已自动合并并触发部署流水线。\"
-              }
-            }"
-
-      - name: Create PR (tests failed - needs manual review)
-        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code != '0'
+      - name: Push branch & create PR (merge conflict)
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'false'
         run: |
           git push origin $BRANCH
 
-          TAIL=$(tail -20 backend/test_output.txt 2>/dev/null || echo "no output")
-
-          # Write PR body to file to avoid JSON escaping issues
-          cat > /tmp/pr_body.json << EOF
-          {
-            "title": "chore: sync upstream updates $(date +%Y-%m-%d) [TEST FAILED]",
-            "body": "## ⚠️ 上游更新 - 单测失败，需人工处理\n\n### New Commits\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n### 测试失败摘要\n请查看 [Actions 日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})",
-            "head": "$BRANCH",
-            "base": "main"
-          }
-          EOF
+          BODY=$(jq -n \
+            --arg commits "${{ steps.check.outputs.new_commits }}" \
+            --arg run_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              title: "chore: sync upstream \(now | strftime("%Y-%m-%d")) [MERGE CONFLICT]",
+              body: ("## ⚠️ 上游更新 - 合并冲突，需人工处理\n\n### New Commits\n```\n" + $commits + "\n```\n\n> 自动合并失败，冲突标记已提交到此分支。\n> checkout 此分支后手动解决冲突，再合并到 main。\n> [查看 Actions 日志](" + $run_url + ")"),
+              head: (env.BRANCH),
+              base: "main"
+            }')
 
           curl -s -X POST \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/pulls" \
-            --data-binary @/tmp/pr_body.json
+            -d "$BODY"
 
-      - name: Notify WeChat - test failed needs review
-        if: steps.check.outputs.has_updates == 'true' && steps.tests.outputs.exit_code != '0'
+      - name: Notify WeChat - merge conflict
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'false'
         run: |
           curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"content\": \"## ⚠️ 上游有更新但单测失败\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 已自动建 PR，请人工检查后合并。\n> [查看 PR](https://github.com/louisleo234/doc-translator/pulls)\"
-              }
-            }"
+            -d "{\"msgtype\":\"markdown\",\"markdown\":{\"content\":\"## ⚠️ 上游更新 - 合并冲突\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 自动合并失败，已建 PR（含冲突标记），请人工 checkout 解决后合并。\n> [查看 PR](https://github.com/${{ github.repository }}/pulls)\"}}"
+
+      - name: Set up Python & run tests
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true'
+        id: tests
+        run: |
+          pip install uv -q
+          cd backend
+          uv sync --extra dev -q
+          # Disable pipefail so pytest exit code is captured even when tests fail
+          set +e
+          uv run pytest tests/ -q --tb=short 2>&1 | tee test_output.txt
+          TEST_EXIT=${PIPESTATUS[0]}
+          set -e
+          echo "exit_code=$TEST_EXIT" >> $GITHUB_OUTPUT
+
+      - name: Auto-merge to main (tests passed)
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true' && steps.tests.outputs.exit_code == '0'
+        run: |
+          git checkout main
+          git merge $BRANCH --no-edit
+          git push origin main
+
+      - name: Trigger Deploy workflow
+        # GITHUB_TOKEN push does NOT auto-trigger other workflows; dispatch explicitly
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true' && steps.tests.outputs.exit_code == '0'
+        run: |
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/workflows/deploy.yml/dispatches" \
+            -d '{"ref":"main"}'
+
+      - name: Notify WeChat - auto deployed
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true' && steps.tests.outputs.exit_code == '0'
+        run: |
+          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"msgtype\":\"markdown\",\"markdown\":{\"content\":\"## ✅ 上游更新已自动同步部署\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 单测通过，已自动合并并触发部署流水线。\"}}"
+
+      - name: Push branch & create PR (tests failed)
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true' && steps.tests.outputs.exit_code != '0'
+        run: |
+          git push origin $BRANCH
+
+          TAIL=$(tail -20 backend/test_output.txt 2>/dev/null || echo "no output")
+
+          BODY=$(jq -n \
+            --arg commits "${{ steps.check.outputs.new_commits }}" \
+            --arg run_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              title: "chore: sync upstream \(now | strftime("%Y-%m-%d")) [TEST FAILED]",
+              body: ("## ⚠️ 上游更新 - 单测失败，需人工处理\n\n### New Commits\n```\n" + $commits + "\n```\n\n### 测试失败摘要\n请查看 [Actions 日志](" + $run_url + ")"),
+              head: (env.BRANCH),
+              base: "main"
+            }')
+
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "$BODY"
+
+      - name: Notify WeChat - test failed needs review
+        if: steps.check.outputs.has_updates == 'true' && steps.prepare.outputs.merge_ok == 'true' && steps.tests.outputs.exit_code != '0'
+        run: |
+          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"msgtype\":\"markdown\",\"markdown\":{\"content\":\"## ⚠️ 上游有更新但单测失败\n\n**项目**: sgp-doc-translation\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**新 Commits**:\n\`\`\`\n${{ steps.check.outputs.new_commits }}\n\`\`\`\n\n> 已自动建 PR，请人工检查后合并。\n> [查看 PR](https://github.com/${{ github.repository }}/pulls)\"}}"
