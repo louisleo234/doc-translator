@@ -53,9 +53,9 @@
 
     <div v-if="selectedCatalogIds.length > 0" class="summary">
       <span>{{ t('thesaurus.totalTermsSelected', 'Total terms') }}: {{ totalTermCount }}</span>
-      <span v-if="totalTermCount > 200" class="warning-text">
-        <WarningOutlined />
-        {{ t('thesaurus.termLimitWarning', 'Only first 200 terms will be used') }}
+      <span v-if="totalTermCount > 200" class="info-text">
+        <InfoCircleOutlined />
+        {{ t('thesaurus.termLimitWarning', 'Only matching terms will be injected into prompt') }}
       </span>
     </div>
   </div>
@@ -69,7 +69,7 @@ import type { Catalog } from '@/types'
 import {
   HolderOutlined,
   CloseOutlined,
-  WarningOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons-vue'
 
 // Props
@@ -310,8 +310,8 @@ function handleDragEnd() {
   color: var(--text-secondary);
 }
 
-.warning-text {
-  color: var(--warning-color, #faad14);
+.info-text {
+  color: var(--text-secondary, #8c8c8c);
   display: flex;
   align-items: center;
   gap: 4px;
