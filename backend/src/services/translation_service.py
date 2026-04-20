@@ -65,7 +65,26 @@ class TranslationService:
         except Exception as e:
             self.logger.error(f"Failed to initialize Bedrock client: {str(e)}")
             raise
-    
+
+    def filter_relevant_terms(
+        self,
+        texts: List[str],
+        term_pairs: List["TermPair"],
+        max_terms: int = 200,
+    ) -> List["TermPair"]:
+        """Filter term pairs to only those whose source_term appears in the texts."""
+        if not texts or not term_pairs:
+            return []
+
+        combined_text = "\n".join(texts)
+        relevant = [tp for tp in term_pairs if tp.source_term in combined_text]
+
+        if len(relevant) > max_terms:
+            relevant.sort(key=lambda tp: len(tp.source_term), reverse=True)
+            relevant = relevant[:max_terms]
+
+        return relevant
+
     def _build_system_prompt(
         self,
         language_pair: LanguagePair,
@@ -489,8 +508,21 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
             # Format request as JSON array with indices
             json_request = self._format_batch_request(batch_texts)
 
-            # Build system prompt with batch mode enabled and term pairs
-            system_prompt = self._build_system_prompt(language_pair, is_batch=True, term_pairs=term_pairs)
+            # Stage 2: filter terms to batch-relevant subset
+            batch_relevant_terms = self.filter_relevant_terms(
+                batch_texts, term_pairs
+            ) if term_pairs else None
+
+            if term_pairs:
+                self.logger.debug(
+                    f"Batch {i // self.batch_size + 1}: "
+                    f"{len(term_pairs)} doc-relevant terms -> "
+                    f"{len(batch_relevant_terms) if batch_relevant_terms else 0} batch-relevant"
+                )
+
+            system_prompt = self._build_system_prompt(
+                language_pair, is_batch=True, term_pairs=batch_relevant_terms
+            )
 
             try:
                 messages = [
@@ -521,7 +553,12 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                     )
                     batch_results: List[TranslationResult] = [TranslationResult(text=t) for t in batch]
                     for original_idx, text in batch_with_indices:
-                        batch_results[original_idx] = await self.translate_text_async(text, language_pair, term_pairs)
+                        fallback_terms = self.filter_relevant_terms(
+                            [text], term_pairs
+                        ) if term_pairs else None
+                        batch_results[original_idx] = await self.translate_text_async(
+                            text, language_pair, fallback_terms
+                        )
                     results.extend(batch_results)
                 else:
                     # Map translations back to original positions
@@ -544,7 +581,12 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                 batch_results = [TranslationResult(text=t) for t in batch]
                 for original_idx, text in batch_with_indices:
                     # translate_text_async returns TranslationResult with error info
-                    batch_results[original_idx] = await self.translate_text_async(text, language_pair, term_pairs)
+                    fallback_terms = self.filter_relevant_terms(
+                        [text], term_pairs
+                    ) if term_pairs else None
+                    batch_results[original_idx] = await self.translate_text_async(
+                        text, language_pair, fallback_terms
+                    )
                 results.extend(batch_results)
 
         return results

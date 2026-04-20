@@ -39,6 +39,16 @@ class TestS3FileStorageInitialization:
         storage = S3FileStorage(bucket_name="explicit-bucket")
         assert storage._bucket_name == "explicit-bucket"
 
+    def test_init_with_explicit_bucket_and_logger(self):
+        """Test initialization with explicit bucket and custom logger."""
+        import logging
+        logger = logging.getLogger("test")
+        storage = S3FileStorage(
+            bucket_name="test-bucket",
+            logger_instance=logger,
+        )
+        assert storage._bucket_name == "test-bucket"
+
 
 class TestS3FileStorageUpload:
     """Tests for file upload operations."""
@@ -292,6 +302,90 @@ class TestS3FileStorageOutput:
         assert result is None
 
 
+class TestS3FileStorageStreamOutput:
+    """Tests for streaming output file retrieval."""
+
+    @pytest.fixture
+    def mock_s3_client(self):
+        """Create a mock S3 client."""
+        client = MagicMock()
+        return client
+
+    @pytest.fixture
+    def storage(self, mock_s3_client):
+        """Create S3FileStorage with mocked S3 client."""
+        with patch.dict("os.environ", {"S3_BUCKET": "test-bucket"}):
+            storage = S3FileStorage()
+            storage._client = mock_s3_client
+            return storage
+
+    @pytest.mark.asyncio
+    async def test_stream_output_success(self, storage, mock_s3_client):
+        """Test successful streaming retrieval returns content_length and chunks."""
+        content = b"A" * 1000
+        body_mock = MagicMock()
+        body_mock.read.side_effect = [content[:500], content[500:], b""]
+        mock_s3_client.get_object.return_value = {
+            "Body": body_mock,
+            "ContentLength": 1000,
+        }
+
+        result = await storage.stream_output("user-123", "job-789", "file.xlsx")
+        assert result is not None
+
+        content_length, generator = result
+        assert content_length == 1000
+
+        chunks = []
+        async for chunk in generator:
+            chunks.append(chunk)
+        assert b"".join(chunks) == content
+
+    @pytest.mark.asyncio
+    async def test_stream_output_not_found(self, storage, mock_s3_client):
+        """Test streaming non-existent file returns None."""
+        mock_s3_client.get_object.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "Not found"}},
+            "GetObject",
+        )
+
+        result = await storage.stream_output("user-123", "job-789", "missing.xlsx")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_stream_output_closes_body(self, storage, mock_s3_client):
+        """Test that the S3 body is closed after iteration completes."""
+        body_mock = MagicMock()
+        body_mock.read.side_effect = [b"data", b""]
+        mock_s3_client.get_object.return_value = {
+            "Body": body_mock,
+            "ContentLength": 4,
+        }
+
+        _, generator = await storage.stream_output("user-123", "job-789", "f.xlsx")
+        async for _ in generator:
+            pass
+
+        body_mock.close.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_stream_output_closes_body_on_error(self, storage, mock_s3_client):
+        """Test that S3 body is closed even if read raises an exception."""
+        body_mock = MagicMock()
+        body_mock.read.side_effect = [b"first chunk", IOError("connection lost")]
+        mock_s3_client.get_object.return_value = {
+            "Body": body_mock,
+            "ContentLength": 1000,
+        }
+
+        _, generator = await storage.stream_output("user-123", "job-789", "f.xlsx")
+        with pytest.raises(IOError):
+            async for _ in generator:
+                pass
+
+        body_mock.close.assert_called_once()
+
+
 class TestS3FileStoragePresignedUrl:
     """Tests for presigned URL generation."""
 
@@ -338,6 +432,45 @@ class TestS3FileStoragePresignedUrl:
             "get_object",
             Params={"Bucket": "test-bucket", "Key": s3_key},
             ExpiresIn=7200
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_download_url_with_filename(self, storage, mock_s3_client):
+        """Test presigned URL includes Content-Disposition when filename is provided."""
+        s3_key = "user-123/outputs/job-789/translated.xlsx"
+        mock_s3_client.generate_presigned_url.return_value = "https://example.com/..."
+
+        url = await storage.generate_download_url(s3_key, filename="report.xlsx")
+
+        assert url == "https://example.com/..."
+        mock_s3_client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={
+                "Bucket": "test-bucket",
+                "Key": s3_key,
+                "ResponseContentDisposition": "attachment; filename*=UTF-8''report.xlsx",
+            },
+            ExpiresIn=900
+        )
+
+    @pytest.mark.asyncio
+    async def test_generate_output_download_url(self, storage, mock_s3_client):
+        """Test generate_output_download_url builds correct key and includes filename."""
+        mock_s3_client.generate_presigned_url.return_value = "https://example.com/..."
+
+        url = await storage.generate_output_download_url(
+            "user-123", "job-789", "translated.xlsx"
+        )
+
+        assert url == "https://example.com/..."
+        mock_s3_client.generate_presigned_url.assert_called_once_with(
+            "get_object",
+            Params={
+                "Bucket": "test-bucket",
+                "Key": "user-123/outputs/job-789/translated.xlsx",
+                "ResponseContentDisposition": "attachment; filename*=UTF-8''translated.xlsx",
+            },
+            ExpiresIn=900
         )
 
 

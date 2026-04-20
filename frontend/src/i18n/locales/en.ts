@@ -217,17 +217,19 @@ export default {
     selectedCatalogs: 'Selected',
     dragToReorder: '(drag to reorder priority)',
     totalTermsSelected: 'Total terms',
-    termLimitWarning: 'Only first 200 terms will be used',
+    termLimitWarning: 'Only matching terms will be injected into prompt',
     termCatalogs: 'Term Catalogs'
   },
 
   // Output Mode
   outputMode: {
     label: 'Output Mode',
-    tooltip: 'Choose how original and translated text are combined in the output document.',
+    tooltip: 'Replace: translation only. Append: original then translation. Prepend: translation then original. Interleave: alternate lines, original first. Interleave (Reversed): alternate lines, translation first.',
     replace: 'Replace',
     append: 'Append',
-    interleaved: 'Interleaved'
+    prepend: 'Prepend',
+    interleave: 'Interleave',
+    interleave_reverse: 'Interleave (Reversed)'
   },
 
   // Error Messages

@@ -217,17 +217,19 @@ export default {
     selectedCatalogs: 'Đã chọn',
     dragToReorder: '(kéo để sắp xếp ưu tiên)',
     totalTermsSelected: 'Tổng thuật ngữ',
-    termLimitWarning: 'Chỉ sử dụng 200 thuật ngữ đầu tiên',
+    termLimitWarning: 'Chỉ các thuật ngữ khớp mới được đưa vào prompt',
     termCatalogs: 'Danh mục thuật ngữ'
   },
 
   // Output Mode
   outputMode: {
     label: 'Chế độ xuất',
-    tooltip: 'Chọn cách kết hợp văn bản gốc và bản dịch trong tài liệu xuất.',
+    tooltip: 'Thay thế: chỉ bản dịch. Nối thêm: bản gốc rồi bản dịch. Chèn trước: bản dịch rồi bản gốc. Xen kẽ: xen kẽ từng dòng, bản gốc trước. Xen kẽ (đảo ngược): xen kẽ từng dòng, bản dịch trước.',
     replace: 'Thay thế',
     append: 'Nối thêm',
-    interleaved: 'Xen kẽ'
+    prepend: 'Chèn trước',
+    interleave: 'Xen kẽ',
+    interleave_reverse: 'Xen kẽ (đảo ngược)'
   },
 
   // Error Messages

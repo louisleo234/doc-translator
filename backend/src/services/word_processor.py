@@ -58,7 +58,6 @@ class WordProcessor(DocumentProcessor):
             logger: Logger instance for logging operations
         """
         self.logger = logger or logging.getLogger(__name__)
-        self._current_document: Optional[Document] = None
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -96,7 +95,6 @@ class WordProcessor(DocumentProcessor):
         except Exception as e:
             raise ValueError(f"Failed to load Word file: {file_path}. Error: {str(e)}")
         
-        self._current_document = document
         segments: List[TextSegment] = []
         segment_id = 0
         
@@ -630,16 +628,15 @@ class WordProcessor(DocumentProcessor):
             segments: List of original text segments
             translations: List of translated texts (same order as segments)
             output_path: Path where the translated document should be saved
-            output_mode: One of "replace", "append", "interleaved" (default: "replace")
+            output_mode: One of "replace", "append", "prepend", "interleave", "interleave_reverse" (default: "replace")
             
         Returns:
             True if writing succeeded, False otherwise
         """
         try:
-            # Load document if not already loaded
-            document = self._current_document
-            if document is None:
-                document = await asyncio.to_thread(Document, str(file_path))
+            # Always load fresh from file to avoid shared state issues
+            # during concurrent processing of multiple files
+            document = await asyncio.to_thread(Document, str(file_path))
             
             # Create translation map with output mode applied
             translation_map = {}
@@ -691,10 +688,6 @@ class WordProcessor(DocumentProcessor):
             await asyncio.to_thread(document.save, str(output_path))
             
             self.logger.info(f"Saved translated Word document to: {output_path}")
-            
-            # Clear the cached document
-            self._current_document = None
-            
             return True
             
         except Exception as e:
