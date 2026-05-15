@@ -5,7 +5,7 @@
     </filter>
   </defs>
   <!-- Background Card (English) -->
-  <rect x="6" y="6" width="26" height="26" rx="4" fill="#4285F4" filter="url(#shadow)"/>
+  <rect x="6" y="6" width="26" height="26" rx="4" fill="#7EC500" filter="url(#shadow)"/>
   <text x="19" y="25" font-family="Arial, sans-serif" font-size="18" fill="white" font-weight="bold" text-anchor="middle">A</text>
   
   <!-- Foreground Card (Chinese) -->

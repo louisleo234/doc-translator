@@ -2,8 +2,7 @@
   <a-layout-header class="navigation-header glass">
     <div class="nav-container">
       <div class="nav-logo" @click="router.push('/main')">
-        <img src="/logo.svg" class="logo-icon" alt="Logo" />
-        <span class="logo-text">{{ t('app.title') }}</span>
+        <img src="/brand.png" class="logo-icon" alt="Chervon Logo" />
       </div>
 
       <!-- Desktop Navigation -->
@@ -254,10 +253,9 @@ async function handleLogout() {
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  height: 48px;
+  width: auto;
   flex-shrink: 0;
-  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
 }
 
 .logo-text {
@@ -297,7 +295,7 @@ async function handleLogout() {
 
 .nav-menu :deep(.ant-menu-item-selected) {
   color: var(--primary-color);
-  background: rgba(99, 102, 241, 0.1); /* Primary color with low opacity */
+  background: rgba(126, 197, 0, 0.1); /* Primary color with low opacity */
 }
 
 /* User Section */
@@ -388,7 +386,7 @@ async function handleLogout() {
 
 .mobile-user-info {
   padding: 16px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+  background: linear-gradient(135deg, rgba(126, 197, 0, 0.1), rgba(145, 211, 26, 0.1));
   display: flex;
   align-items: center;
   gap: 12px;
@@ -447,7 +445,7 @@ async function handleLogout() {
 }
 
 .mobile-nav-menu :deep(.ant-menu-item-selected) {
-  background-color: rgba(99, 102, 241, 0.08); /* Indigo 50 opacity */
+  background-color: rgba(126, 197, 0, 0.08); /* Primary color with low opacity */
   color: var(--primary-color);
 }
 
