@@ -23,19 +23,29 @@ export default defineConfig({
     // Enable code splitting
     rollupOptions: {
       output: {
-        // Manual chunk splitting for better caching
-        manualChunks: {
-          // Vendor chunks
-          'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'ant-design': ['ant-design-vue', '@ant-design/icons-vue'],
-          'apollo': ['@apollo/client', 'graphql'],
+        manualChunks(id) {
+          if (id.includes('node_modules/vue') || id.includes('node_modules/vue-router') || id.includes('node_modules/pinia')) {
+            return 'vue-vendor'
+          }
+          if (id.includes('node_modules/@ant-design/icons-vue')) {
+            return 'ant-design-icons'
+          }
+          if (id.includes('node_modules/lodash') || id.includes('node_modules/lodash-es')) {
+            return 'lodash'
+          }
+          if (id.includes('node_modules/dayjs')) {
+            return 'dayjs'
+          }
+          if (id.includes('node_modules/ant-design-vue')) {
+            return 'ant-design'
+          }
+          if (id.includes('node_modules/@apollo/client') || id.includes('node_modules/graphql')) {
+            return 'apollo'
+          }
         },
       },
     },
-    // Optimize chunk size
-    chunkSizeWarningLimit: 1000,
-    // Enable minification (esbuild is faster than terser)
-    minify: 'esbuild',
+    chunkSizeWarningLimit: 1600,
   },
   // Optimize dependencies
   optimizeDeps: {
