@@ -25,7 +25,7 @@ const showNavigation = computed(() => {
 const themeConfig = computed(() => ({
   algorithm: isDark.value ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
   token: {
-    colorPrimary: '#6366f1',
+    colorPrimary: '#7EC500',
     borderRadius: 8,
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     // We let Ant Design handle background colors in dark mode, or override with transparency where needed

@@ -1,11 +1,11 @@
 :root {
   /* Common Colors */
-  --primary-color: #6366f1;
-  /* Indigo 500 */
-  --primary-hover: #4f46e5;
-  /* Indigo 600 */
-  --secondary-color: #8b5cf6;
-  /* Violet 500 */
+  --primary-color: #7EC500;
+  /* Chervon Green */
+  --primary-hover: #6AB000;
+  /* Chervon Green Darker */
+  --secondary-color: #91D31A;
+  /* Chervon Green Lighter */
   --success-color: #10b981;
   /* Emerald 500 */
   --warning-color: #f59e0b;
@@ -27,8 +27,8 @@
   --bg-color: #f8fafc;
   /* Slate 50 */
   --surface-color: #ffffff;
-  --text-main: #1e293b;
-  /* Slate 800 */
+  --text-main: #212121;
+  /* Chervon Charcoal */
   --text-secondary: #64748b;
   /* Slate 500 */
   --border-color: #e2e8f0;
