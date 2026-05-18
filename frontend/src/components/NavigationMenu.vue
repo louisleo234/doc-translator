@@ -2,7 +2,7 @@
   <a-layout-header class="navigation-header glass">
     <div class="nav-container">
       <div class="nav-logo" @click="router.push('/main')">
-        <img src="/brand.png" class="logo-icon" alt="Chervon Logo" />
+        <img :src="logoSrc" class="logo-icon" alt="Chervon Logo" />
       </div>
 
       <!-- Desktop Navigation -->
@@ -148,6 +148,7 @@ import { ref, watch, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useTheme } from '@/composables/useTheme'
 import { useLanguage } from '@/composables/useLanguage'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import ThemeSwitcher from './ThemeSwitcher.vue'
@@ -167,6 +168,9 @@ const route = useRoute()
 const authStore = useAuthStore()
 const errorHandler = useErrorHandler({ showNotification: true })
 const { t } = useLanguage()
+const { isDark } = useTheme()
+
+const logoSrc = computed(() => isDark.value ? '/brand-white.png' : '/brand.png')
 
 const selectedKeys = ref<string[]>([route.path])
 const showMobileMenu = ref(false)
