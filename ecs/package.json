@@ -20,7 +20,7 @@
     "@types/node": "^25.5.0",
     "jest": "^30.3.0",
     "ts-jest": "^29.2.5",
-    "fast-check": "^4.5.3",
+    "fast-check": "^4.6.0",
     "aws-cdk": "^2.1116.0"
   },
   "jest": {
