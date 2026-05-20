@@ -150,7 +150,8 @@ class AppContext:
         # Initialize translation components
         # TranslationService uses boto3 default region chain; model_id is runtime config from DynamoDB
         self.translation_service = TranslationService(
-            batch_size=self.app_config.translation_batch_size
+            batch_size=self.app_config.translation_batch_size,
+            max_batch_concurrency=self.app_config.max_batch_concurrency
         )
         self.excel_processor = ExcelProcessor()
         self.concurrent_executor = ConcurrentExecutor(

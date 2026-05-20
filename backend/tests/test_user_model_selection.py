@@ -94,6 +94,7 @@ def mock_translation_orchestrator():
     orchestrator.s3_file_storage = Mock()
     orchestrator.translation_service = Mock()
     orchestrator.translation_service.batch_size = 10
+    orchestrator.translation_service.max_batch_concurrency = 3
     return orchestrator
 
 
@@ -167,6 +168,7 @@ async def test_job_uses_user_preferred_model(
         MockTS.assert_called_once_with(
             model_id=custom_model_id,
             batch_size=10,
+            max_batch_concurrency=3,
         )
 
         # Verify the per-job service was passed to the orchestrator
@@ -226,6 +228,7 @@ async def test_job_falls_back_to_default_when_no_settings(
         MockTS.assert_called_once_with(
             model_id=default_model_id,
             batch_size=10,
+            max_batch_concurrency=3,
         )
 
 
@@ -284,6 +287,7 @@ async def test_job_falls_back_when_model_invalid(
         MockTS.assert_called_once_with(
             model_id=fallback_model_id,
             batch_size=10,
+            max_batch_concurrency=3,
         )
 
         # Verify is_model_valid was called with the invalid model

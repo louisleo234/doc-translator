@@ -114,8 +114,8 @@ class UserSettingsService:
         
         if translation_batch_size is not None:
             # Validate batch size
-            if not 1 <= translation_batch_size <= 100:
-                raise ValueError("Translation batch size must be between 1 and 100")
+            if not 1 <= translation_batch_size <= 200:
+                raise ValueError("Translation batch size must be between 1 and 200")
             updates["translation_batch_size"] = translation_batch_size
         
         if max_concurrent_tasks is not None:

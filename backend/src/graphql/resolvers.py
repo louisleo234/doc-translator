@@ -637,6 +637,7 @@ async def resolve_create_translation_job(
 
     # Get user's preferred model ID, fall back to global default
     user_model_id = None
+    user_settings = None
     if context.user_settings_service and context.global_config_service:
         try:
             user_settings = await context.user_settings_service.get_user_settings(username)
@@ -654,14 +655,25 @@ async def resolve_create_translation_job(
     # Create a per-job TranslationService with the user's preferred model
     from ..services.translation_service import TranslationService
     if user_model_id:
+        job_batch_size = user_settings.translation_batch_size
         job_translation_service = TranslationService(
             model_id=user_model_id,
-            batch_size=context.translation_orchestrator.translation_service.batch_size
+            batch_size=job_batch_size,
+            max_batch_concurrency=context.translation_orchestrator.translation_service.max_batch_concurrency
         )
         logger.info(f"Job {job.id}: using model {user_model_id} (user preference)")
     else:
         job_translation_service = context.translation_orchestrator.translation_service
         logger.info(f"Job {job.id}: using shared translation service (default model)")
+
+    # Create a per-job ConcurrentExecutor with user's max_concurrent_tasks
+    from ..services.concurrent_executor import ConcurrentExecutor
+    if user_settings:
+        job_executor = ConcurrentExecutor(
+            max_file_concurrency=user_settings.max_concurrent_tasks
+        )
+    else:
+        job_executor = context.translation_orchestrator.executor
 
     # Start processing asynchronously (don't await)
     # This allows the mutation to return immediately while processing continues
@@ -672,7 +684,7 @@ async def resolve_create_translation_job(
     job_orchestrator = TranslationOrchestrator(
         excel_processor=context.translation_orchestrator.excel_processor,
         translation_service=job_translation_service,
-        concurrent_executor=context.translation_orchestrator.executor,
+        concurrent_executor=job_executor,
         output_dir=job_output_dir,
         thesaurus_service=context.translation_orchestrator.thesaurus_service,
         s3_file_storage=context.translation_orchestrator.s3_file_storage,

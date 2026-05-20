@@ -41,7 +41,7 @@ class TestAppConfigFromEnv:
         assert config.s3_bucket == "test-bucket"
         assert config.max_concurrent_files == 5
         assert config.translation_batch_size == 20
-        assert config.max_file_size == 52428800
+        assert config.max_file_size == 209715200
 
     def test_from_env_accepts_custom_values(self, monkeypatch):
         """Test that custom env values are used."""

@@ -178,7 +178,7 @@ class TestUpdateUserSettings:
             )
     
     async def test_update_settings_batch_size_too_high(self, service, mock_repository):
-        """Test that batch size above 100 fails."""
+        """Test that batch size above 200 fails."""
         mock_repository.get_user_settings.return_value = {
             "user_id": "user-123",
             "default_model_id": "global.amazon.nova-2-lite-v1:0",
@@ -192,7 +192,7 @@ class TestUpdateUserSettings:
         with pytest.raises(ValueError, match="batch size"):
             await service.update_user_settings(
                 user_id="user-123",
-                translation_batch_size=101,
+                translation_batch_size=201,
             )
     
     async def test_update_settings_concurrent_tasks_too_low(self, service, mock_repository):
