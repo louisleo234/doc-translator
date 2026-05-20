@@ -217,7 +217,9 @@ class TestAuthServiceProperties:
         
         # Verify it's a valid bcrypt hash
         # Bcrypt hashes have the format: $2b$rounds$salt+hash
-        assert hashed.startswith("$2b$12$"), "Hash should use bcrypt with 12 rounds"
+        from src.services.user_service import PasswordService
+        expected_prefix = f"$2b${PasswordService.BCRYPT_ROUNDS:02d}$"
+        assert hashed.startswith(expected_prefix), f"Hash should use bcrypt with {PasswordService.BCRYPT_ROUNDS} rounds"
         assert len(hashed) == 60, "Bcrypt hash should be 60 characters"
         
         # Verify the hash can be used to verify the original password

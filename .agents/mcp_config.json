@@ -6,7 +6,7 @@
         "-y",
         "chrome-devtools-mcp@latest"
       ],
-      "disabled": true,
+      "disabled": false,
       "autoApprove": [
         "take_snapshot",
         "list_pages",

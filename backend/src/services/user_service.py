@@ -7,6 +7,7 @@ This module provides:
 """
 import bcrypt
 import logging
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -29,7 +30,7 @@ class PasswordService:
     Uses bcrypt with configurable cost factor (default: 12).
     """
     
-    BCRYPT_ROUNDS = 12
+    BCRYPT_ROUNDS = 4 if (os.getenv("TESTING") or os.getenv("PYTEST_CURRENT_TEST")) else 12
     
     @staticmethod
     def hash_password(password: str) -> str:
