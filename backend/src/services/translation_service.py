@@ -56,8 +56,8 @@ class TranslationService:
             AWS region is determined by boto3 default credential/region chain.
         """
         self.model_id = model_id
-        self.batch_size = batch_size
-        self.max_batch_concurrency = max_batch_concurrency
+        self.batch_size = int(batch_size)
+        self.max_batch_concurrency = int(max_batch_concurrency)
         self.logger = logger or logging.getLogger(__name__)
 
         # Initialize boto3 bedrock-runtime client
@@ -524,9 +524,9 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
                             self.logger.warning(
                                 f"Progress callback error: {e}"
                             )
-            except BaseException as e:
-                # Catch all exceptions (including CancelledError) to ensure
-                # other batch tasks are not cancelled by asyncio.gather.
+            except Exception as e:
+                # Catch standard exceptions to ensure other batch tasks are
+                # not cancelled by asyncio.gather on a single batch failure.
                 # Mark each position in this batch as failed with original text.
                 self.logger.error(
                     f"Batch {batch_idx} failed unexpectedly: "
@@ -540,7 +540,7 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
 
         # Launch all batch tasks concurrently (semaphore limits parallelism)
         tasks = [
-            asyncio.ensure_future(
+            asyncio.create_task(
                 process_batch(batch_idx, start_index, batch)
             )
             for batch_idx, (start_index, batch) in enumerate(batches)

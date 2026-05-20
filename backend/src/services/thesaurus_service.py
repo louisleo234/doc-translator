@@ -23,12 +23,6 @@ from ..storage.dynamodb_repository import DynamoDBRepository
 
 logger = logging.getLogger(__name__)
 
-
-# Constants
-MAX_TERM_LENGTH = 500
-MAX_TERMS_FOR_TRANSLATION = 5000
-
-
 class ThesaurusServiceError(Exception):
     """Base exception for ThesaurusService errors."""
     pass
@@ -68,6 +62,8 @@ class ThesaurusService:
     def __init__(
         self,
         repository: DynamoDBRepository,
+        max_term_length: int = 500,
+        max_terms_for_translation: int = 5000,
         logger_instance: Optional[logging.Logger] = None
     ):
         """
@@ -75,9 +71,13 @@ class ThesaurusService:
         
         Args:
             repository: DynamoDB repository for persistence.
+            max_term_length: Maximum allowed length of a single term.
+            max_terms_for_translation: Maximum term pairs returned for translation.
             logger_instance: Optional logger instance.
         """
         self._repository = repository
+        self.max_term_length = max_term_length
+        self.max_terms_for_translation = max_terms_for_translation
         self._logger = logger_instance or logger
     
     # =========================================================================
@@ -100,9 +100,9 @@ class ThesaurusService:
             raise ValidationError(f"{field_name} cannot be empty or whitespace-only")
         
         # Check length
-        if len(term) > MAX_TERM_LENGTH:
+        if len(term) > self.max_term_length:
             raise ValidationError(
-                f"{field_name} exceeds maximum length of {MAX_TERM_LENGTH} characters"
+                f"{field_name} exceeds maximum length of {self.max_term_length} characters"
             )
     
     def validate_term_pair(self, source_term: str, target_term: str) -> None:
@@ -705,7 +705,7 @@ class ThesaurusService:
         self,
         language_pair_id: str,
         catalog_ids: List[str],
-        max_terms: int = MAX_TERMS_FOR_TRANSLATION
+        max_terms: Optional[int] = None
     ) -> List[TermPair]:
         """
         Get merged term pairs for translation from multiple catalogs.
@@ -722,6 +722,9 @@ class ThesaurusService:
         Returns:
             List of TermPair objects for injection into system prompt.
         """
+        if max_terms is None:
+            max_terms = self.max_terms_for_translation
+
         if not catalog_ids:
             return []
         

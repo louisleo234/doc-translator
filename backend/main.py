@@ -131,7 +131,9 @@ class AppContext:
 
         # Initialize ThesaurusService
         self.thesaurus_service = ThesaurusService(
-            repository=self.dynamodb_repository
+            repository=self.dynamodb_repository,
+            max_term_length=self.app_config.max_term_length,
+            max_terms_for_translation=self.app_config.max_terms_for_translation
         )
         
         # Initialize Unit-2 Config Storage Services
