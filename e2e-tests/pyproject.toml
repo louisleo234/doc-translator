@@ -25,12 +25,7 @@ dependencies = [
     "pytest-clarity>=1.0.1",
 ]
 
-[project.optional-dependencies]
-browser = [
-    # Browser automation utilities (fallback if MCP not available)
-    "selenium>=4.15.0",
-    "webdriver-manager>=4.0.0",
-]
+
 
 [tool.uv]
 package = false

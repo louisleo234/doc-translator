@@ -61,7 +61,7 @@ uv run pytest -m "not browser" -v
 
 - `e2e` - End-to-end tests requiring running services
 - `api` - API-only tests (no browser automation)
-- `browser` - Browser automation tests (requires Chrome DevTools MCP)
+- `browser` - Browser automation tests (uses native CDP over WebSockets)
 - `slow` - Slow running tests
 
 ## E2E Test Coverage
@@ -75,12 +75,12 @@ uv run pytest -m "not browser" -v
 - Jobs query and creation
 - Error handling (unauthenticated requests, invalid login)
 
-### Browser Tests (with Chrome DevTools MCP)
+### Browser Tests (with Native CDP over WebSockets)
 - Complete user workflow: login → upload → translate → download
-- Language pair management UI
-- Error scenarios and recovery
-- Responsive design at different viewports
-- Real-time progress updates
+- Language pair management UI (with Ant Design mousedown simulations)
+- Error scenarios and recovery (self-healing sessions)
+- Responsive design at different viewports (mobile, tablet, desktop)
+- Real-time progress updates (unmount-safe polling)
 
 ### Cross-Platform Tests
 - Platform detection (Windows, macOS, Linux)
@@ -111,20 +111,15 @@ Edit `e2e_config.json` to customize:
 }
 ```
 
-## Chrome DevTools MCP (Optional)
+## Chrome DevTools Protocol (CDP) WebSocket Automation
 
-For browser automation tests, configure Chrome DevTools MCP in `.kiro/settings/mcp.json`:
+For browser E2E tests, the test runner automatically launches a dedicated headless Chrome process binding to port `9223` (or connects to an existing CDP instance) and controls it natively over WebSockets via `aiohttp`.
 
-```json
-{
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "uvx",
-      "args": ["mcp-chrome-devtools@latest"],
-      "disabled": false
-    }
-  }
-}
+No external browser drivers (such as Selenium or ChromeDriver) are needed, keeping the test environment completely self-contained and fast.
+
+To run browser tests autonomously in the CLI:
+```bash
+uv run python run_e2e_tests.py --mode chrome
 ```
 
 ## Test Reports
