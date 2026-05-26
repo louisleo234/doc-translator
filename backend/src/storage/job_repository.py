@@ -671,3 +671,25 @@ class JobRepository:
         return await self._run_sync(
             self._list_jobs, user_id, status, date_from, date_to, page, page_size
         )
+
+    def _scan_all_jobs(self) -> List[TranslationJob]:
+        """
+        Scan all jobs across all users in the DynamoDB table (admin only).
+        """
+        resource = self._get_resource()
+        table = resource.Table(JOBS_TABLE)
+
+        response = table.scan()
+        items = response.get("Items", [])
+
+        while "LastEvaluatedKey" in response:
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            items.extend(response.get("Items", []))
+
+        return [self._deserialize_job(item) for item in items]
+
+    async def scan_all_jobs(self) -> List[TranslationJob]:
+        """
+        Async scan all jobs across all users in the DynamoDB table (admin only).
+        """
+        return await self._run_sync(self._scan_all_jobs)

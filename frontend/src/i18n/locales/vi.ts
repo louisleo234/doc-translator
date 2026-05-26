@@ -6,7 +6,8 @@ export default {
 
   // Navigation
   nav: {
-    main: 'Trang chính',
+    main: 'Dịch',
+    dashboard: 'Bảng điều khiển',
     settings: 'Cài đặt',
     thesaurus: 'Từ điển thuật ngữ',
     users: 'Quản lý người dùng',
@@ -50,12 +51,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: 'Bảng điều khiển dịch',
+    title: 'Dịch',
     subtitle: 'Tải lên tài liệu và dịch ngay lập tức.',
     start: 'Bắt đầu dịch',
     actionDescription: 'Sẵn sàng dịch? Nhấp vào nút bên dưới để bắt đầu.',
     validationUpload: 'Vui lòng tải lên ít nhất một tài liệu',
     validationLanguage: 'Vui lòng chọn cặp ngôn ngữ'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: 'Bảng điều khiển',
+    subtitle: 'Xem thống kê dịch thuật và tổng quan về thuật ngữ của bạn.',
+    translatedDocs: 'Tài liệu đã dịch',
+    translatedDocsDesc: 'Số lượng tệp được dịch thành công',
+    termPairs: 'Tổng số cặp thuật ngữ',
+    termPairsDesc: 'Các cặp thuật ngữ nguồn và đích đã cấu hình',
+    translatedItems: 'Đoạn/Ô đã dịch',
+    translatedItemsDesc: 'Tổng số đoạn văn bản được dịch trong tài liệu',
+    termCatalogs: 'Danh mục thuật ngữ',
+    termCatalogsDesc: 'Số lượng thư mục sắp xếp các cặp thuật ngữ',
+    noData: 'Chưa có dữ liệu thống kê'
   },
 
   // Job

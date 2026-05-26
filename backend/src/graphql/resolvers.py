@@ -15,7 +15,7 @@ from .schema import (
     TranslationJob as GQLTranslationJob, FileUpload, FileProgress, FileError,
     CompletedFile, JobStatus as GQLJobStatus, ModelInfo as GQLModelInfo,
     ModelConfig as GQLModelConfig, DocumentType as GQLDocumentType,
-    JobHistoryResponse
+    JobHistoryResponse, DashboardStats
 )
 from .decorators import (
     get_current_user_from_context,
@@ -474,6 +474,67 @@ async def resolve_model_config(info: Info) -> GQLModelConfig:
         model_id=model_id,
         model_name=model_name,
         available_models=[convert_model_info(model) for model in available_models]
+    )
+
+
+async def resolve_dashboard_stats(info: Info) -> DashboardStats:
+    """
+    Get translation dashboard statistics for the authenticated user.
+
+    Args:
+        info: Strawberry Info object
+
+    Returns:
+        DashboardStats: Statistics of jobs, files, and term pairs.
+
+    Raises:
+        AuthenticationError: If user is not authenticated
+    """
+    username = require_auth(info)
+
+    # Verify role to determine visibility scope (admin sees all users' stats, regular user sees only their own)
+    user = await verify_and_get_user(info)
+    is_admin = user.role == UserRole.ADMIN
+
+    context: ResolverContext = info.context.get("resolver_context")
+
+    # Fetch jobs depending on user role
+    if is_admin:
+        jobs = await context.job_manager.job_store.scan_all_jobs()
+    else:
+        # Scope job_store to current user
+        context.job_manager.job_store.set_user_context(username)
+        # page_size=10000 ensures we load all user jobs without pagination cuts
+        jobs, _ = await context.job_manager.job_store.list_jobs(page=1, page_size=10000)
+
+    translated_documents = 0
+    translated_items = 0
+
+    for job in jobs:
+        translated_documents += job.files_completed
+        for cf in job.completed_files:
+            translated_items += cf.segments_translated
+
+    term_catalogs_count = 0
+    term_pairs_count = 0
+    if context.thesaurus_service and context.language_pair_service:
+        try:
+            # Get all global language pairs
+            pairs = await context.language_pair_service.get_language_pairs("__global__")
+            for pair in pairs:
+                # Get all catalogs for this language pair
+                catalogs = await context.thesaurus_service.get_catalogs(pair.id)
+                term_catalogs_count += len(catalogs)
+                for catalog in catalogs:
+                    term_pairs_count += catalog.term_count
+        except Exception as e:
+            logger.error(f"Error calculating thesaurus stats for dashboard: {e}")
+
+    return DashboardStats(
+        translated_documents=translated_documents,
+        term_pairs=term_pairs_count,
+        translated_items=translated_items,
+        term_catalogs=term_catalogs_count
     )
 
 

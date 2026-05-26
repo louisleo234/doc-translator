@@ -135,3 +135,14 @@ export const JOB_HISTORY_QUERY = gql`
     }
   }
 `
+
+export const DASHBOARD_STATS_QUERY = gql`
+  query DashboardStats {
+    dashboardStats {
+      translatedDocuments
+      termPairs
+      translatedItems
+      termCatalogs
+    }
+  }
+`

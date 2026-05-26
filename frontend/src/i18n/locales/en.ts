@@ -6,7 +6,8 @@ export default {
 
   // Navigation
   nav: {
-    main: 'Home',
+    main: 'Translation',
+    dashboard: 'Dashboard',
     settings: 'Settings',
     thesaurus: 'Thesaurus',
     users: 'User Management',
@@ -50,12 +51,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: 'Translation Dashboard',
+    title: 'Translation',
     subtitle: 'Upload your documents and translate them instantly.',
     start: 'Start Translation',
     actionDescription: 'Ready to translate? Click below to start the process.',
     validationUpload: 'Please upload at least one file',
     validationLanguage: 'Please select a language pair'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: 'Dashboard',
+    subtitle: 'View your translation statistics and thesaurus overview.',
+    translatedDocs: 'Translated Documents',
+    translatedDocsDesc: 'Number of successfully translated files',
+    termPairs: 'Total Term Pairs',
+    termPairsDesc: 'Configured source and target translation terms',
+    translatedItems: 'Translated Paragraphs/Cells',
+    translatedItemsDesc: 'Total translated segments across all documents',
+    termCatalogs: 'Term Catalogs',
+    termCatalogsDesc: 'Number of directories organizing term pairs',
+    noData: 'No statistics available yet'
   },
 
   // Job

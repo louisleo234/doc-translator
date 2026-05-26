@@ -395,6 +395,17 @@ class PaginatedTermPairs:
 
 
 @strawberry.type
+class DashboardStats:
+    """
+    Dashboard statistics for documents, term pairs, and translated items.
+    """
+    translated_documents: int
+    term_pairs: int
+    translated_items: int
+    term_catalogs: int
+
+
+@strawberry.type
 class Query:
     """
     Root query type for the GraphQL API.
@@ -402,6 +413,20 @@ class Query:
     Provides read-only access to user information, jobs, and language pairs.
     """
     
+    @strawberry.field
+    async def dashboard_stats(self, info: Info) -> DashboardStats:
+        """
+        Get translation dashboard statistics for the authenticated user.
+        
+        Returns:
+            DashboardStats: Statistics of jobs, files, and term pairs.
+            
+        Raises:
+            AuthenticationError: If the user is not authenticated
+        """
+        from .resolvers import resolve_dashboard_stats
+        return await resolve_dashboard_stats(info)
+
     @strawberry.field
     async def me(self, info: Info) -> User:
         """

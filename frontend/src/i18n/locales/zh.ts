@@ -6,7 +6,8 @@ export default {
 
   // Navigation
   nav: {
-    main: '主页',
+    main: '翻译',
+    dashboard: '仪表盘',
     settings: '设置',
     thesaurus: '术语库',
     users: '用户管理',
@@ -50,12 +51,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: '翻译仪表板',
+    title: '翻译',
     subtitle: '上传您的文档并立即翻译。',
     start: '开始翻译',
     actionDescription: '准备好翻译了吗？点击下方按钮开始。',
     validationUpload: '请至少上传一个文档',
     validationLanguage: '请选择语言对'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: '仪表盘',
+    subtitle: '查看您的翻译统计信息和词汇库概览。',
+    translatedDocs: '已翻译文档',
+    translatedDocsDesc: '成功完成翻译的文件数量',
+    termPairs: '术语对数量',
+    termPairsDesc: '已配置的源术语和译文术语对',
+    translatedItems: '已翻译段落数',
+    translatedItemsDesc: '多格式文档中已成功翻译的总片段数',
+    termCatalogs: '术语目录数',
+    termCatalogsDesc: '用于组织术语对的词汇库目录数量',
+    noData: '暂无统计数据'
   },
 
   // Job
