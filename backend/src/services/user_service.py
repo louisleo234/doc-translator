@@ -206,7 +206,9 @@ class UserService:
         except ValueError as e:
             raise UserAlreadyExistsError(str(e))
     
-    async def get_user(self, username: str) -> Optional[User]:
+    async def get_user(
+        self, username: str, *, consistent_read: bool = False
+    ) -> Optional[User]:
         """
         Get a user by username.
         
@@ -216,7 +218,12 @@ class UserService:
         Returns:
             User object if found, None otherwise.
         """
-        user_data = await self.repository.get_user(username)
+        if consistent_read:
+            user_data = await self.repository.get_user(
+                username, consistent_read=True
+            )
+        else:
+            user_data = await self.repository.get_user(username)
         if user_data:
             return User.from_dict(user_data)
         return None

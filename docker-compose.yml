@@ -33,6 +33,7 @@
 #   - doc_translation_language_pairs  - Language pair config
 #   - doc_translation_user_settings   - Per-user settings
 #   - doc_translation_global_config   - Global app config
+#   - doc_translation_mcp_tokens      - Independent MCP credentials (hashes only)
 #
 # Example IAM Policy:
 # {

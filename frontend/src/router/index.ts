@@ -44,6 +44,11 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
+    path: '/mcp-tokens',
+    name: 'McpTokenManagement',
+    redirect: { path: '/settings', query: { tab: 'mcp-tokens' } },
+  },
+  {
     path: '/change-password',
     name: 'ChangePassword',
     component: () => import('@/views/ChangePasswordPage.vue'),
@@ -67,7 +72,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   // Load auth from localStorage if not already loaded
-  if (!authStore.isAuthenticated && !authStore.isLoading) {
+  if (!authStore.isAuthenticated || !authStore.user) {
     const token = localStorage.getItem('auth_token')
     if (token) {
       // Try to restore session

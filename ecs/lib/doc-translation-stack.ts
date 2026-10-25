@@ -39,6 +39,10 @@ export interface DocTranslationStackProps extends cdk.StackProps {
    *  Defaults to 0.0.0.0/0 (anywhere) if not specified.
    *  Example: "203.0.113.0/24,198.51.100.0/24" */
   albSourceCidr?: string;
+  /** Comma-separated explicit MCP Host allowlist; defaults to ALBs and loopbacks. */
+  mcpAllowedHosts?: string;
+  /** Comma-separated MCP Origin allowlist; defaults to HTTP ALB origins. */
+  mcpAllowedOrigins?: string;
 }
 
 export class DocTranslationStack extends cdk.Stack {
@@ -435,5 +439,22 @@ export class DocTranslationStack extends cdk.Stack {
         exportName: `${projectName}-internal-alb-dns`,
       });
     }
+
+    // Resolve after both load balancers exist so private MCP access is allowed.
+    const mcpHosts = ['localhost:*', '127.0.0.1:*', '[::1]:*', this.alb.loadBalancerDnsName];
+    const mcpOrigins = [`http://${this.alb.loadBalancerDnsName}`];
+    if (this.internalAlb) {
+      mcpHosts.push(this.internalAlb.loadBalancerDnsName);
+      mcpOrigins.push(`http://${this.internalAlb.loadBalancerDnsName}`);
+    }
+    for (const configured of [props.mcpAllowedHosts, props.mcpAllowedOrigins]) {
+      if (configured?.split(',').some(value => value.trim() === '*')) {
+        throw new Error('MCP allowlists require explicit hosts and origins');
+      }
+    }
+    this.backendContainer.addEnvironment(
+      'MCP_ALLOWED_HOSTS', props.mcpAllowedHosts ?? cdk.Fn.join(',', mcpHosts));
+    this.backendContainer.addEnvironment(
+      'MCP_ALLOWED_ORIGINS', props.mcpAllowedOrigins ?? cdk.Fn.join(',', mcpOrigins));
   }
 }

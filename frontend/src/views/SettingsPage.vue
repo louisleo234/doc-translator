@@ -6,6 +6,8 @@
          <p class="subtitle">{{ t('settings.subtitle', 'Manage translation models and language configurations.') }}</p>
       </div>
       
+      <a-tabs :active-key="activeTab" :destroy-inactive-tab-pane="true" @change="changeTab">
+        <a-tab-pane key="translation" :tab="t('settings.translationTab')">
       <a-row :gutter="[24, 24]">
         <!-- Model Selection Card -->
         <a-col :xs="24" :sm="24" :md="24" :lg="24" :xl="24">
@@ -168,12 +170,18 @@
           </a-card>
         </a-col>
       </a-row>
+        </a-tab-pane>
+        <a-tab-pane v-if="canEdit" key="mcp-tokens" :tab="t('nav.mcpTokens')">
+          <McpTokenManagement v-if="activeTab === 'mcp-tokens'" />
+        </a-tab-pane>
+      </a-tabs>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, defineAsyncComponent } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
     GlobalOutlined,
@@ -199,9 +207,22 @@ import type { LanguagePair, ModelConfig } from '@/types'
 const configStore = useConfigStore()
 const authStore = useAuthStore()
 const { t } = useLanguage()
+const route = useRoute()
+const router = useRouter()
+const McpTokenManagement = defineAsyncComponent(() => import('./McpTokenManagement.vue'))
 
 // Admin-only editing
 const canEdit = computed(() => authStore.isAdmin)
+const activeTab = computed(() =>
+  canEdit.value && route.query.tab === 'mcp-tokens' ? 'mcp-tokens' : 'translation'
+)
+
+function changeTab(key: string | number) {
+  const query = { ...route.query }
+  if (key === 'mcp-tokens' && canEdit.value) query.tab = 'mcp-tokens'
+  else delete query.tab
+  router.replace({ path: '/settings', query })
+}
 
 // Form state
 const formState = reactive({
@@ -421,6 +442,10 @@ async function handleModelChange(modelId: string) {
 
 .settings-card {
   margin-bottom: 24px;
+}
+
+.content :deep(.mcp-token-page) {
+  padding: 0;
 }
 
 .card-icon {

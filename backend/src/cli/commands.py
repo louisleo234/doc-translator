@@ -40,6 +40,10 @@ async def create_tables_command() -> int:
         logger.info("Configuration tables created successfully!")
         await repo.initialize_users_table()
         logger.info("Users table created successfully!")
+        from src.storage.mcp_token_repository import McpTokenRepository
+
+        await McpTokenRepository(repo).initialize_table()
+        logger.info("MCP token table created successfully!")
         return 0
     except Exception as e:
         logger.error(f"Failed to create tables: {e}")

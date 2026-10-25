@@ -12,6 +12,10 @@ from strawberry.file_uploads import Upload
 from strawberry.types import Info
 
 from ..models.job import JobStatus as JobStatusEnum
+from .mcp_token_resolvers import (
+    CreateMcpTokenInput, McpTokenCreated, McpTokenPage,
+    resolve_create_mcp_token, resolve_mcp_tokens, resolve_revoke_mcp_token,
+)
 
 
 @strawberry.enum
@@ -407,6 +411,12 @@ class DashboardStats:
 
 @strawberry.type
 class Query:
+    @strawberry.field
+    async def mcp_tokens(
+        self, info: Info, first: int = 20, after: Optional[str] = None
+    ) -> McpTokenPage:
+        return await resolve_mcp_tokens(info, first, after)
+
     """
     Root query type for the GraphQL API.
     
@@ -707,6 +717,16 @@ class Query:
 
 @strawberry.type
 class Mutation:
+    @strawberry.mutation
+    async def create_mcp_token(
+        self, info: Info, input: CreateMcpTokenInput
+    ) -> McpTokenCreated:
+        return await resolve_create_mcp_token(info, input)
+
+    @strawberry.mutation
+    async def revoke_mcp_token(self, info: Info, id: str) -> bool:
+        return await resolve_revoke_mcp_token(info, id)
+
     """
     Root mutation type for the GraphQL API.
     

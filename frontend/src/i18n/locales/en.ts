@@ -1,4 +1,42 @@
 export default {
+  mcpTokens: {
+    "title": "MCP Tokens",
+    "scope": "Tokens can read all existing and future terminology catalogs.",
+    "refresh": "Refresh",
+    "create": "Create token",
+    "empty": "No MCP tokens",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "name": "Name",
+    "id": "Token ID",
+    "createdBy": "Created by",
+    "createdAt": "Created at",
+    "expiresAt": "Expires at",
+    "status": "Status",
+    "actions": "Actions",
+    "active": "Active",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "revoke": "Revoke",
+    "validity": "Validity",
+    "days": "{days} days",
+    "custom": "Custom date",
+    "secretTitle": "Copy your token",
+    "secretWarning": "This token is shown only once. Copy it now; you cannot view it again after closing.",
+    "endpoint": "MCP endpoint",
+    "copy": "Copy token",
+    "close": "Close",
+    "revokeWarning": "Revocation is permanent. Clients using this token will lose access. Create a new token to restore access.",
+    "loadError": "Unable to load tokens.",
+    "createError": "Unable to create token. If the response was lost, refresh the list and revoke the new token before creating another.",
+    "nameRequired": "Enter a name (1–100 characters).",
+    "expiryRequired": "Choose a future expiry date.",
+    "copied": "Token copied",
+    "copyError": "Copy failed. Select and copy the token manually.",
+    "revokeError": "Unable to revoke token.",
+    "revokedSuccess": "Token revoked"
+},
   // Application
   app: {
     title: 'Doc Translation'
@@ -6,6 +44,7 @@ export default {
 
   // Navigation
   nav: {
+    mcpTokens: "MCP Tokens",
     main: 'Translation',
     dashboard: 'Dashboard',
     settings: 'Settings',
@@ -117,6 +156,7 @@ export default {
 
   // Settings Page
   settings: {
+    translationTab: 'Translation settings',
     subtitle: 'Manage translation models and language configurations.',
     languagePairs: 'Language Pair Management',
     addLanguagePair: 'Add Language Pair',
