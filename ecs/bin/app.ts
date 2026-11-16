@@ -31,6 +31,8 @@ const translationBatchSize = app.node.tryGetContext('translationBatchSize') || p
 const maxFileSize = app.node.tryGetContext('maxFileSize') || process.env.MAX_FILE_SIZE || '52428800';
 const logLevel = app.node.tryGetContext('logLevel') || process.env.LOG_LEVEL || 'INFO';
 const debug = app.node.tryGetContext('debug') || process.env.DEBUG || 'false';
+const mcpAllowedHosts = app.node.tryGetContext('mcpAllowedHosts') ?? process.env.MCP_ALLOWED_HOSTS;
+const mcpAllowedOrigins = app.node.tryGetContext('mcpAllowedOrigins') ?? process.env.MCP_ALLOWED_ORIGINS;
 
 // CPU architecture: detect from host, allow override via context or env var
 // os.arch() returns 'arm64' on ARM64, 'x64' on x86_64
@@ -74,6 +76,8 @@ new DocTranslationStack(app, 'DocTranslationStack', {
   maxFileSize,
   logLevel,
   debug,
+  mcpAllowedHosts,
+  mcpAllowedOrigins,
   useArm64,
   enableInternalAlb,
   vpcCidr,

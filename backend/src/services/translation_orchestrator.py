@@ -467,26 +467,20 @@ class TranslationOrchestrator:
                     f"Term filtering: {len(term_pairs)} total -> {len(doc_relevant_terms)} relevant to document"
                 )
 
-            # Batch translate with incremental progress updates
+            # Batch translate with concurrent progress updates
             self.logger.info(f"Translating {total_segments} segments...")
-            batch_size = self.translation_service.batch_size
             combined_translations = []
             segments_translated = 0
-            
-            # Process in batches with progress updates
-            for i in range(0, len(text_values), batch_size):
-                batch = text_values[i:i + batch_size]
-                
-                # Translate this batch with term pairs for consistent terminology
-                batch_translations = await self.translation_service.batch_translate_async(
-                    batch,
-                    language_pair,
-                    doc_relevant_terms
-                )
-                combined_translations.extend(batch_translations)
-                
-                # Update progress after each batch
-                segments_translated += len(batch)
+
+            # Define progress callback for batch completion
+            async def on_batch_complete(batch_idx, batch_len, total):
+                nonlocal segments_translated
+                # Progress is monotonically increasing: += only adds, never
+                # subtracts. Concurrent batches may complete out of order but
+                # each callback increments the shared counter, so the reported
+                # total never decreases. Python's GIL ensures the read-modify-
+                # write is safe within a single-threaded asyncio event loop.
+                segments_translated += batch_len
                 job.update_file_progress(
                     filename=original_filename,
                     segments_translated=segments_translated
@@ -496,7 +490,10 @@ class TranslationOrchestrator:
                 # Notify progress callback
                 if progress_callback:
                     try:
-                        current_progress = segments_translated / total_segments if total_segments > 0 else 0
+                        current_progress = (
+                            segments_translated / total_segments
+                            if total_segments > 0 else 0
+                        )
                         await progress_callback("file_progress", {
                             "filename": original_filename,
                             "segments_translated": segments_translated,
@@ -504,9 +501,25 @@ class TranslationOrchestrator:
                             "progress": current_progress
                         })
                     except Exception as e:
-                        self.logger.warning(f"Progress callback error: {e}")
-                
-                self.logger.debug(f"Batch {i // batch_size + 1} completed: {segments_translated}/{total_segments} segments")
+                        self.logger.warning(
+                            f"Progress callback error: {e}"
+                        )
+
+                self.logger.debug(
+                    f"Batch {batch_idx + 1} completed: "
+                    f"{segments_translated}/{total_segments} segments"
+                )
+
+            # Translate all segments (TranslationService handles
+            # batching + concurrency internally)
+            combined_translations = (
+                await self.translation_service.batch_translate_async(
+                    text_values,
+                    language_pair,
+                    doc_relevant_terms,
+                    progress_callback=on_batch_complete
+                )
+            )
             
             # Count failed segments and build warning
             segments_failed = sum(1 for r in combined_translations if r.failed)

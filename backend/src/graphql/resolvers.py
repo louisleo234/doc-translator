@@ -15,7 +15,7 @@ from .schema import (
     TranslationJob as GQLTranslationJob, FileUpload, FileProgress, FileError,
     CompletedFile, JobStatus as GQLJobStatus, ModelInfo as GQLModelInfo,
     ModelConfig as GQLModelConfig, DocumentType as GQLDocumentType,
-    JobHistoryResponse
+    JobHistoryResponse, DashboardStats
 )
 from .decorators import (
     get_current_user_from_context,
@@ -477,6 +477,67 @@ async def resolve_model_config(info: Info) -> GQLModelConfig:
     )
 
 
+async def resolve_dashboard_stats(info: Info) -> DashboardStats:
+    """
+    Get translation dashboard statistics for the authenticated user.
+
+    Args:
+        info: Strawberry Info object
+
+    Returns:
+        DashboardStats: Statistics of jobs, files, and term pairs.
+
+    Raises:
+        AuthenticationError: If user is not authenticated
+    """
+    username = require_auth(info)
+
+    # Verify role to determine visibility scope (admin sees all users' stats, regular user sees only their own)
+    user = await verify_and_get_user(info)
+    is_admin = user.role == UserRole.ADMIN
+
+    context: ResolverContext = info.context.get("resolver_context")
+
+    # Fetch jobs depending on user role
+    if is_admin:
+        jobs = await context.job_manager.job_store.scan_all_jobs()
+    else:
+        # Scope job_store to current user
+        context.job_manager.job_store.set_user_context(username)
+        # page_size=10000 ensures we load all user jobs without pagination cuts
+        jobs, _ = await context.job_manager.job_store.list_jobs(page=1, page_size=10000)
+
+    translated_documents = 0
+    translated_items = 0
+
+    for job in jobs:
+        translated_documents += job.files_completed
+        for cf in job.completed_files:
+            translated_items += cf.segments_translated
+
+    term_catalogs_count = 0
+    term_pairs_count = 0
+    if context.thesaurus_service and context.language_pair_service:
+        try:
+            # Get all global language pairs
+            pairs = await context.language_pair_service.get_language_pairs("__global__")
+            for pair in pairs:
+                # Get all catalogs for this language pair
+                catalogs = await context.thesaurus_service.get_catalogs(pair.id)
+                term_catalogs_count += len(catalogs)
+                for catalog in catalogs:
+                    term_pairs_count += catalog.term_count
+        except Exception as e:
+            logger.error(f"Error calculating thesaurus stats for dashboard: {e}")
+
+    return DashboardStats(
+        translated_documents=translated_documents,
+        term_pairs=term_pairs_count,
+        translated_items=translated_items,
+        term_catalogs=term_catalogs_count
+    )
+
+
 # Mutation Resolvers
 
 async def resolve_login(username: str, password: str, info: Info) -> AuthPayload:
@@ -637,6 +698,7 @@ async def resolve_create_translation_job(
 
     # Get user's preferred model ID, fall back to global default
     user_model_id = None
+    user_settings = None
     if context.user_settings_service and context.global_config_service:
         try:
             user_settings = await context.user_settings_service.get_user_settings(username)
@@ -654,14 +716,25 @@ async def resolve_create_translation_job(
     # Create a per-job TranslationService with the user's preferred model
     from ..services.translation_service import TranslationService
     if user_model_id:
+        job_batch_size = user_settings.translation_batch_size
         job_translation_service = TranslationService(
             model_id=user_model_id,
-            batch_size=context.translation_orchestrator.translation_service.batch_size
+            batch_size=job_batch_size,
+            max_batch_concurrency=context.translation_orchestrator.translation_service.max_batch_concurrency
         )
         logger.info(f"Job {job.id}: using model {user_model_id} (user preference)")
     else:
         job_translation_service = context.translation_orchestrator.translation_service
         logger.info(f"Job {job.id}: using shared translation service (default model)")
+
+    # Create a per-job ConcurrentExecutor with user's max_concurrent_tasks
+    from ..services.concurrent_executor import ConcurrentExecutor
+    if user_settings:
+        job_executor = ConcurrentExecutor(
+            max_file_concurrency=user_settings.max_concurrent_tasks
+        )
+    else:
+        job_executor = context.translation_orchestrator.executor
 
     # Start processing asynchronously (don't await)
     # This allows the mutation to return immediately while processing continues
@@ -672,7 +745,7 @@ async def resolve_create_translation_job(
     job_orchestrator = TranslationOrchestrator(
         excel_processor=context.translation_orchestrator.excel_processor,
         translation_service=job_translation_service,
-        concurrent_executor=context.translation_orchestrator.executor,
+        concurrent_executor=job_executor,
         output_dir=job_output_dir,
         thesaurus_service=context.translation_orchestrator.thesaurus_service,
         s3_file_storage=context.translation_orchestrator.s3_file_storage,

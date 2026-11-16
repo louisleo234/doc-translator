@@ -1,4 +1,42 @@
 export default {
+  mcpTokens: {
+    "title": "MCP Token",
+    "scope": "Token 可只读查询全部现有及未来新增的词库目录。",
+    "refresh": "刷新",
+    "create": "创建 Token",
+    "empty": "暂无 MCP Token",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "第 {page} 页",
+    "name": "名称",
+    "id": "Token ID",
+    "createdBy": "创建者",
+    "createdAt": "创建时间",
+    "expiresAt": "到期时间",
+    "status": "状态",
+    "actions": "操作",
+    "active": "有效",
+    "expired": "已过期",
+    "revoked": "已撤销",
+    "revoke": "撤销",
+    "validity": "有效期",
+    "days": "{days} 天",
+    "custom": "自定义日期",
+    "secretTitle": "复制您的 Token",
+    "secretWarning": "完整 Token 仅显示这一次。请立即复制，关闭后无法再次查看。",
+    "endpoint": "MCP 地址",
+    "copy": "复制 Token",
+    "close": "关闭",
+    "revokeWarning": "撤销不可逆。使用此 Token 的客户端将失去访问权限；需创建新 Token 恢复访问。",
+    "loadError": "无法加载 Token。",
+    "createError": "无法创建 Token。如响应丢失，请刷新列表并撤销新凭证后再创建。",
+    "nameRequired": "请输入名称（1–100 个字符）。",
+    "expiryRequired": "请选择未来的到期时间。",
+    "copied": "Token 已复制",
+    "copyError": "复制失败，请手动选中并复制 Token。",
+    "revokeError": "无法撤销 Token。",
+    "revokedSuccess": "Token 已撤销"
+},
   // Application
   app: {
     title: '文档翻译'
@@ -6,7 +44,9 @@ export default {
 
   // Navigation
   nav: {
-    main: '主页',
+    mcpTokens: "MCP Token",
+    main: '翻译',
+    dashboard: '仪表盘',
     settings: '设置',
     thesaurus: '术语库',
     users: '用户管理',
@@ -50,12 +90,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: '翻译仪表板',
+    title: '翻译',
     subtitle: '上传您的文档并立即翻译。',
     start: '开始翻译',
     actionDescription: '准备好翻译了吗？点击下方按钮开始。',
     validationUpload: '请至少上传一个文档',
     validationLanguage: '请选择语言对'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: '仪表盘',
+    subtitle: '查看您的翻译统计信息和词汇库概览。',
+    translatedDocs: '已翻译文档',
+    translatedDocsDesc: '成功完成翻译的文件数量',
+    termPairs: '术语对数量',
+    termPairsDesc: '已配置的源术语和译文术语对',
+    translatedItems: '已翻译段落数',
+    translatedItemsDesc: '多格式文档中已成功翻译的总片段数',
+    termCatalogs: '术语目录数',
+    termCatalogsDesc: '用于组织术语对的词汇库目录数量',
+    noData: '暂无统计数据'
   },
 
   // Job
@@ -101,6 +156,7 @@ export default {
 
   // Settings Page
   settings: {
+    translationTab: '翻译设置',
     subtitle: '管理翻译模型和语言配置。',
     languagePairs: '语言对管理',
     addLanguagePair: '添加语言对',

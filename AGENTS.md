@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to agent when working with code in this repository.
 
 ## Project Overview
 
@@ -166,7 +166,7 @@ Optional:
 - PEP 8, 88-char line limit (Black formatter style)
 - Type hints required for function parameters and return values
 - Use specific exception types and context managers for resource management
-- See `.kiro/steering/python-best-practices.md` for full guidelines
+- See `.agents/rules/python-best-practices.md` for full guidelines
 
 ## Deployment Options
 

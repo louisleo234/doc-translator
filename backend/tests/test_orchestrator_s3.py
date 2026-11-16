@@ -191,7 +191,7 @@ class TestOrchestratorS3Uploads:
         mock_translation_service = Mock()
         mock_translation_service.batch_size = 10
         mock_translation_service.batch_translate_async = AsyncMock(
-            side_effect=lambda texts, lp, tp: [TranslationResult(text="translated")] * len(texts)
+            side_effect=lambda texts, lp, tp, **kwargs: [TranslationResult(text="translated")] * len(texts)
         )
         
         # Create mock concurrent executor
@@ -348,7 +348,7 @@ class TestOrchestratorS3Uploads:
         mock_translation_service = Mock()
         mock_translation_service.batch_size = 10
         mock_translation_service.batch_translate_async = AsyncMock(
-            side_effect=lambda texts, lp, tp: [TranslationResult(text="translated")] * len(texts)
+            side_effect=lambda texts, lp, tp, **kwargs: [TranslationResult(text="translated")] * len(texts)
         )
         
         # Create mock concurrent executor
@@ -469,7 +469,7 @@ class TestOrchestratorS3Uploads:
         mock_translation_service = Mock()
         mock_translation_service.batch_size = 10
         mock_translation_service.batch_translate_async = AsyncMock(
-            side_effect=lambda texts, lp, tp: [TranslationResult(text="translated")] * len(texts)
+            side_effect=lambda texts, lp, tp, **kwargs: [TranslationResult(text="translated")] * len(texts)
         )
         
         # Create mock concurrent executor
@@ -580,7 +580,7 @@ class TestOrchestratorS3Uploads:
         mock_translation_service = Mock()
         mock_translation_service.batch_size = 10
         mock_translation_service.batch_translate_async = AsyncMock(
-            side_effect=lambda texts, lp, tp: [TranslationResult(text="translated")] * len(texts)
+            side_effect=lambda texts, lp, tp, **kwargs: [TranslationResult(text="translated")] * len(texts)
         )
         
         # Create mock concurrent executor

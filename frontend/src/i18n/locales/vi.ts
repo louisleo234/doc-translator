@@ -1,4 +1,42 @@
 export default {
+  mcpTokens: {
+    "title": "Token MCP",
+    "scope": "Token có quyền chỉ đọc tất cả danh mục thuật ngữ hiện có và được tạo sau này.",
+    "refresh": "Làm mới",
+    "create": "Tạo token",
+    "empty": "Chưa có token MCP",
+    "previous": "Trang trước",
+    "next": "Trang sau",
+    "page": "Trang {page}",
+    "name": "Tên",
+    "id": "ID token",
+    "createdBy": "Người tạo",
+    "createdAt": "Ngày tạo",
+    "expiresAt": "Hết hạn",
+    "status": "Trạng thái",
+    "actions": "Thao tác",
+    "active": "Có hiệu lực",
+    "expired": "Đã hết hạn",
+    "revoked": "Đã thu hồi",
+    "revoke": "Thu hồi",
+    "validity": "Thời hạn",
+    "days": "{days} ngày",
+    "custom": "Ngày tùy chọn",
+    "secretTitle": "Sao chép token",
+    "secretWarning": "Token chỉ hiển thị một lần. Hãy sao chép ngay; bạn không thể xem lại sau khi đóng.",
+    "endpoint": "Địa chỉ MCP",
+    "copy": "Sao chép token",
+    "close": "Đóng",
+    "revokeWarning": "Thu hồi là vĩnh viễn. Khách dùng token này sẽ mất quyền truy cập. Tạo token mới để khôi phục quyền truy cập.",
+    "loadError": "Không thể tải token.",
+    "createError": "Không thể tạo token. Nếu phản hồi bị mất, hãy làm mới danh sách và thu hồi token mới trước khi tạo lại.",
+    "nameRequired": "Nhập tên (1–100 ký tự).",
+    "expiryRequired": "Chọn ngày hết hạn trong tương lai.",
+    "copied": "Đã sao chép token",
+    "copyError": "Sao chép thất bại. Hãy chọn và sao chép token thủ công.",
+    "revokeError": "Không thể thu hồi token.",
+    "revokedSuccess": "Đã thu hồi token"
+},
   // Application
   app: {
     title: 'Dịch thuật tài liệu'
@@ -6,7 +44,9 @@ export default {
 
   // Navigation
   nav: {
-    main: 'Trang chính',
+    mcpTokens: "Token MCP",
+    main: 'Dịch',
+    dashboard: 'Bảng điều khiển',
     settings: 'Cài đặt',
     thesaurus: 'Từ điển thuật ngữ',
     users: 'Quản lý người dùng',
@@ -50,12 +90,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: 'Bảng điều khiển dịch',
+    title: 'Dịch',
     subtitle: 'Tải lên tài liệu và dịch ngay lập tức.',
     start: 'Bắt đầu dịch',
     actionDescription: 'Sẵn sàng dịch? Nhấp vào nút bên dưới để bắt đầu.',
     validationUpload: 'Vui lòng tải lên ít nhất một tài liệu',
     validationLanguage: 'Vui lòng chọn cặp ngôn ngữ'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: 'Bảng điều khiển',
+    subtitle: 'Xem thống kê dịch thuật và tổng quan về thuật ngữ của bạn.',
+    translatedDocs: 'Tài liệu đã dịch',
+    translatedDocsDesc: 'Số lượng tệp được dịch thành công',
+    termPairs: 'Tổng số cặp thuật ngữ',
+    termPairsDesc: 'Các cặp thuật ngữ nguồn và đích đã cấu hình',
+    translatedItems: 'Đoạn/Ô đã dịch',
+    translatedItemsDesc: 'Tổng số đoạn văn bản được dịch trong tài liệu',
+    termCatalogs: 'Danh mục thuật ngữ',
+    termCatalogsDesc: 'Số lượng thư mục sắp xếp các cặp thuật ngữ',
+    noData: 'Chưa có dữ liệu thống kê'
   },
 
   // Job
@@ -101,6 +156,7 @@ export default {
 
   // Settings Page
   settings: {
+    translationTab: 'Cài đặt dịch thuật',
     subtitle: 'Quản lý mô hình dịch và cấu hình ngôn ngữ.',
     languagePairs: 'Quản lý cặp ngôn ngữ',
     addLanguagePair: 'Thêm cặp ngôn ngữ',

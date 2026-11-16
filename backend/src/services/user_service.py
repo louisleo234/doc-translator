@@ -7,6 +7,7 @@ This module provides:
 """
 import bcrypt
 import logging
+import os
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -29,7 +30,7 @@ class PasswordService:
     Uses bcrypt with configurable cost factor (default: 12).
     """
     
-    BCRYPT_ROUNDS = 12
+    BCRYPT_ROUNDS = 4 if (os.getenv("TESTING") or os.getenv("PYTEST_CURRENT_TEST")) else 12
     
     @staticmethod
     def hash_password(password: str) -> str:
@@ -205,7 +206,9 @@ class UserService:
         except ValueError as e:
             raise UserAlreadyExistsError(str(e))
     
-    async def get_user(self, username: str) -> Optional[User]:
+    async def get_user(
+        self, username: str, *, consistent_read: bool = False
+    ) -> Optional[User]:
         """
         Get a user by username.
         
@@ -215,7 +218,12 @@ class UserService:
         Returns:
             User object if found, None otherwise.
         """
-        user_data = await self.repository.get_user(username)
+        if consistent_read:
+            user_data = await self.repository.get_user(
+                username, consistent_read=True
+            )
+        else:
+            user_data = await self.repository.get_user(username)
         if user_data:
             return User.from_dict(user_data)
         return None

@@ -167,8 +167,8 @@ class UserSettings:
             user_id=data["user_id"],
             default_model_id=data["default_model_id"],
             ui_language=data.get("ui_language", "zh"),
-            translation_batch_size=data.get("translation_batch_size", 10),
-            max_concurrent_tasks=data.get("max_concurrent_tasks", 3),
+            translation_batch_size=int(data.get("translation_batch_size", 10)),
+            max_concurrent_tasks=int(data.get("max_concurrent_tasks", 3)),
             created_at=created_at or datetime.now(timezone.utc),
             updated_at=updated_at or datetime.now(timezone.utc),
         )

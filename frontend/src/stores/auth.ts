@@ -141,7 +141,16 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Load authentication from localStorage
    */
-  async function loadAuth(): Promise<boolean> {
+  let authRestorePromise: Promise<boolean> | null = null
+
+  function loadAuth(): Promise<boolean> {
+    if (!authRestorePromise) {
+      authRestorePromise = restoreAuth().finally(() => { authRestorePromise = null })
+    }
+    return authRestorePromise
+  }
+
+  async function restoreAuth(): Promise<boolean> {
     const savedToken = localStorage.getItem('auth_token')
     const timestamp = localStorage.getItem('auth_token_timestamp')
 

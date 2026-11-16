@@ -12,7 +12,7 @@ import re
 import time
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, Callable, TYPE_CHECKING
 import boto3
 from botocore.exceptions import ClientError
 
@@ -40,6 +40,7 @@ class TranslationService:
         self,
         model_id: str = 'global.amazon.nova-2-lite-v1:0',
         batch_size: int = 50,
+        max_batch_concurrency: int = 3,
         logger: Optional[logging.Logger] = None
     ):
         """
@@ -48,13 +49,15 @@ class TranslationService:
         Args:
             model_id: Bedrock model ID to use (default: 'global.amazon.nova-2-lite-v1:0')
             batch_size: Number of texts to translate in a single batch (default: 50)
+            max_batch_concurrency: Max concurrent batch API calls (default: 3)
             logger: Logger instance for logging operations
 
         Note:
             AWS region is determined by boto3 default credential/region chain.
         """
         self.model_id = model_id
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
+        self.max_batch_concurrency = int(max_batch_concurrency)
         self.logger = logger or logging.getLogger(__name__)
 
         # Initialize boto3 bedrock-runtime client
@@ -466,11 +469,13 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
         self,
         texts: List[str],
         language_pair: LanguagePair,
-        term_pairs: Optional[List["TermPair"]] = None
+        term_pairs: Optional[List["TermPair"]] = None,
+        progress_callback: Optional[Callable] = None
     ) -> List[TranslationResult]:
         """
         Translate multiple texts in batches using JSON format for reliable ordering (async version).
 
+        Batches are processed concurrently up to max_batch_concurrency in parallel.
         Returns TranslationResult objects that carry error metadata alongside translations.
         On failure, falls back to individual translation. Failed segments have failed=True.
 
@@ -478,6 +483,8 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
             texts: List of texts in source language to translate
             language_pair: LanguagePair specifying source and target languages
             term_pairs: Optional list of TermPair objects for terminology injection
+            progress_callback: Optional async callback called after each batch completes
+                with (batch_index, batch_size, total_texts)
 
         Returns:
             List of TranslationResult in the same order as input
@@ -485,111 +492,200 @@ Output: [{{"index": 0, "translation": "Văn bản tiếng Việt"}}, {{"index": 
         if not texts:
             return []
 
-        results: List[TranslationResult] = []
-
-        # Process texts in batches
+        # Split texts into batches
+        batches: List[Tuple[int, List[str]]] = []
         for i in range(0, len(texts), self.batch_size):
-            batch = texts[i:i + self.batch_size]
+            batches.append((i, texts[i:i + self.batch_size]))
 
-            # Filter out empty texts - let the model handle language detection
-            batch_with_indices = []
-            for idx, text in enumerate(batch):
-                if text and text.strip():
-                    batch_with_indices.append((idx, text))
+        # Pre-allocate results list
+        results: List[Optional[TranslationResult]] = [None] * len(texts)
 
-            # If no non-empty texts in this batch, just return originals
-            if not batch_with_indices:
-                results.extend(TranslationResult(text=t) for t in batch)
-                continue
+        semaphore = asyncio.Semaphore(self.max_batch_concurrency)
 
-            # Prepare batch translation request using JSON format
-            batch_texts = [text for _, text in batch_with_indices]
+        async def process_batch(
+            batch_idx: int, start_index: int, batch: List[str]
+        ) -> None:
+            try:
+                async with semaphore:
+                    batch_results = await self._translate_single_batch(
+                        batch, language_pair, term_pairs, batch_idx
+                    )
+                    # Place results at correct positions
+                    for j, result in enumerate(batch_results):
+                        results[start_index + j] = result
 
-            # Format request as JSON array with indices
-            json_request = self._format_batch_request(batch_texts)
-
-            # Stage 2: filter terms to batch-relevant subset
-            batch_relevant_terms = self.filter_relevant_terms(
-                batch_texts, term_pairs
-            ) if term_pairs else None
-
-            if term_pairs:
-                self.logger.debug(
-                    f"Batch {i // self.batch_size + 1}: "
-                    f"{len(term_pairs)} doc-relevant terms -> "
-                    f"{len(batch_relevant_terms) if batch_relevant_terms else 0} batch-relevant"
+                    # Fire progress callback
+                    if progress_callback:
+                        try:
+                            await progress_callback(
+                                batch_idx, len(batch), len(texts)
+                            )
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Progress callback error: {e}"
+                            )
+            except Exception as e:
+                # Catch standard exceptions to ensure other batch tasks are
+                # not cancelled by asyncio.gather on a single batch failure.
+                # Mark each position in this batch as failed with original text.
+                self.logger.error(
+                    f"Batch {batch_idx} failed unexpectedly: "
+                    f"{type(e).__name__}: {e}"
                 )
+                for j in range(len(batch)):
+                    results[start_index + j] = TranslationResult(
+                        text=batch[j], failed=True,
+                        error_code="BatchProcessingError"
+                    )
 
-            system_prompt = self._build_system_prompt(
-                language_pair, is_batch=True, term_pairs=batch_relevant_terms
+        # Launch all batch tasks concurrently (semaphore limits parallelism)
+        tasks = [
+            asyncio.create_task(
+                process_batch(batch_idx, start_index, batch)
+            )
+            for batch_idx, (start_index, batch) in enumerate(batches)
+        ]
+
+        await asyncio.gather(*tasks)
+
+        # Convert None entries (should not happen) to originals
+        final_results: List[TranslationResult] = []
+        for i, r in enumerate(results):
+            if r is None:
+                final_results.append(TranslationResult(text=texts[i]))
+            else:
+                final_results.append(r)
+
+        return final_results
+
+    async def _translate_single_batch(
+        self,
+        batch: List[str],
+        language_pair: LanguagePair,
+        term_pairs: Optional[List["TermPair"]],
+        batch_idx: int
+    ) -> List[TranslationResult]:
+        """
+        Translate a single batch of texts. Handles fallback to individual
+        translation on JSON parse failure or API error.
+
+        Args:
+            batch: List of texts in this batch
+            language_pair: LanguagePair for translation
+            term_pairs: Optional term pairs for terminology injection
+            batch_idx: Index of this batch (for logging)
+
+        Returns:
+            List of TranslationResult for this batch
+        """
+        # Filter out empty texts - let the model handle language detection
+        batch_with_indices = []
+        for idx, text in enumerate(batch):
+            if text and text.strip():
+                batch_with_indices.append((idx, text))
+
+        # If no non-empty texts in this batch, just return originals
+        if not batch_with_indices:
+            return [TranslationResult(text=t) for t in batch]
+
+        # Prepare batch translation request using JSON format
+        batch_texts = [text for _, text in batch_with_indices]
+
+        # Format request as JSON array with indices
+        json_request = self._format_batch_request(batch_texts)
+
+        # Stage 2: filter terms to batch-relevant subset
+        batch_relevant_terms = self.filter_relevant_terms(
+            batch_texts, term_pairs
+        ) if term_pairs else None
+
+        if term_pairs:
+            self.logger.debug(
+                f"Batch {batch_idx + 1}: "
+                f"{len(term_pairs)} doc-relevant terms -> "
+                f"{len(batch_relevant_terms) if batch_relevant_terms else 0} batch-relevant"
             )
 
-            try:
-                messages = [
-                    {
-                        "role": "user",
-                        "content": [{"text": json_request}]
-                    }
-                ]
+        system_prompt = self._build_system_prompt(
+            language_pair, is_batch=True, term_pairs=batch_relevant_terms
+        )
 
-                system_config = [{"text": system_prompt}]
-
-                inference_config = {
-                    "maxTokens": 32000,
-                    "temperature": 0.3
+        try:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [{"text": json_request}]
                 }
+            ]
 
-                batch_result, _ = await self._call_bedrock_with_retry(
-                    messages, system_config, inference_config
+            system_config = [{"text": system_prompt}]
+
+            inference_config = {
+                "maxTokens": 32000,
+                "temperature": 0.3
+            }
+
+            batch_result, _ = await self._call_bedrock_with_retry(
+                messages, system_config, inference_config
+            )
+
+            # Parse JSON response and extract translations
+            parsed_translations = self._parse_batch_response(
+                batch_result, len(batch_texts)
+            )
+
+            if parsed_translations is None:
+                # JSON parsing failed - fall back to single-cell translation
+                self.logger.warning(
+                    f"JSON response parsing failed, falling back to "
+                    f"single-cell translation mode"
                 )
-
-                # Parse JSON response and extract translations
-                parsed_translations = self._parse_batch_response(batch_result, len(batch_texts))
-
-                if parsed_translations is None:
-                    # JSON parsing failed - fall back to single-cell translation
-                    self.logger.warning(
-                        f"JSON response parsing failed, falling back to single-cell translation mode"
-                    )
-                    batch_results: List[TranslationResult] = [TranslationResult(text=t) for t in batch]
-                    for original_idx, text in batch_with_indices:
-                        fallback_terms = self.filter_relevant_terms(
-                            [text], term_pairs
-                        ) if term_pairs else None
-                        batch_results[original_idx] = await self.translate_text_async(
-                            text, language_pair, fallback_terms
-                        )
-                    results.extend(batch_results)
-                else:
-                    # Map translations back to original positions
-                    batch_results = [TranslationResult(text=t) for t in batch]
-                    for (original_idx, _), translation in zip(batch_with_indices, parsed_translations):
-                        batch_results[original_idx] = TranslationResult(text=translation)
-
-                    results.extend(batch_results)
-
-                    self.logger.debug(
-                        f"Batch translated {len(batch_texts)} texts successfully using JSON format "
-                        f"({language_pair.source_language} → {language_pair.target_language})"
-                    )
-
-            except Exception as e:
-                self.logger.error(
-                    f"Batch translation failed: {str(e)}, falling back to individual translation"
-                )
-                # Fallback: translate individually
-                batch_results = [TranslationResult(text=t) for t in batch]
+                batch_results: List[TranslationResult] = [
+                    TranslationResult(text=t) for t in batch
+                ]
                 for original_idx, text in batch_with_indices:
-                    # translate_text_async returns TranslationResult with error info
                     fallback_terms = self.filter_relevant_terms(
                         [text], term_pairs
                     ) if term_pairs else None
-                    batch_results[original_idx] = await self.translate_text_async(
-                        text, language_pair, fallback_terms
+                    batch_results[original_idx] = (
+                        await self.translate_text_async(
+                            text, language_pair, fallback_terms
+                        )
                     )
-                results.extend(batch_results)
+                return batch_results
+            else:
+                # Map translations back to original positions
+                batch_results = [TranslationResult(text=t) for t in batch]
+                for (original_idx, _), translation in zip(
+                    batch_with_indices, parsed_translations
+                ):
+                    batch_results[original_idx] = TranslationResult(
+                        text=translation
+                    )
 
-        return results
+                self.logger.debug(
+                    f"Batch translated {len(batch_texts)} texts "
+                    f"successfully using JSON format "
+                    f"({language_pair.source_language} -> "
+                    f"{language_pair.target_language})"
+                )
+                return batch_results
+
+        except Exception as e:
+            self.logger.error(
+                f"Batch translation failed: {str(e)}, "
+                f"falling back to individual translation"
+            )
+            # Fallback: translate individually
+            batch_results = [TranslationResult(text=t) for t in batch]
+            for original_idx, text in batch_with_indices:
+                fallback_terms = self.filter_relevant_terms(
+                    [text], term_pairs
+                ) if term_pairs else None
+                batch_results[original_idx] = await self.translate_text_async(
+                    text, language_pair, fallback_terms
+                )
+            return batch_results
 
     def batch_translate(
         self,

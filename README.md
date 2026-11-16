@@ -100,4 +100,4 @@ All endpoints under `/api` prefix:
 
 ## Documentation
 
-For detailed architecture and technical reference, see [.claude/CLAUDE.md](.claude/CLAUDE.md).
+For detailed architecture and technical reference, see [AGENTS.md](AGENTS.md).

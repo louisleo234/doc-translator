@@ -38,6 +38,12 @@ from src.services.thesaurus_service import ThesaurusService
 from src.services.global_config_service import GlobalConfigService
 from src.services.language_pair_service import LanguagePairService
 from src.services.user_settings_service import UserSettingsService
+from src.services.mcp_token_service import McpTokenService
+from src.services.terminology_service import TerminologyService
+from src.storage.mcp_token_repository import McpTokenRepository
+from src.storage.terminology_repository import TerminologyRepository
+from src.mcp_server.server import create_mcp_runtime
+from src.mcp_server.config import McpSettings
 
 # Load environment variables
 load_dotenv()
@@ -106,6 +112,11 @@ class AppContext:
         # Initialize DynamoDB repository
         # Region is determined by boto3 default chain (env vars, config file, instance metadata)
         self.dynamodb_repository = DynamoDBRepository()
+        self.mcp_token_repository = McpTokenRepository(self.dynamodb_repository)
+        self.mcp_token_service = McpTokenService(self.mcp_token_repository)
+        self.terminology_service = TerminologyService(
+            TerminologyRepository(self.dynamodb_repository)
+        )
         
         # Initialize UserService (for user management)
         self.user_service = UserService(
@@ -131,7 +142,9 @@ class AppContext:
 
         # Initialize ThesaurusService
         self.thesaurus_service = ThesaurusService(
-            repository=self.dynamodb_repository
+            repository=self.dynamodb_repository,
+            max_term_length=self.app_config.max_term_length,
+            max_terms_for_translation=self.app_config.max_terms_for_translation
         )
         
         # Initialize Unit-2 Config Storage Services
@@ -150,7 +163,8 @@ class AppContext:
         # Initialize translation components
         # TranslationService uses boto3 default region chain; model_id is runtime config from DynamoDB
         self.translation_service = TranslationService(
-            batch_size=self.app_config.translation_batch_size
+            batch_size=self.app_config.translation_batch_size,
+            max_batch_concurrency=self.app_config.max_batch_concurrency
         )
         self.excel_processor = ExcelProcessor()
         self.concurrent_executor = ConcurrentExecutor(
@@ -192,6 +206,7 @@ class AppContext:
 
         # Initialize users table
         await self.dynamodb_repository.initialize_users_table()
+        await self.mcp_token_repository.initialize_table()
 
         # Initialize job repository table
         await self.job_repository.initialize_table()
@@ -249,6 +264,14 @@ class AppContext:
 
 # Global app context
 app_context: AppContext = None
+
+# Providers resolve after AppContext startup; importing the app never contacts AWS.
+mcp_settings = McpSettings.from_env()
+mcp_runtime = create_mcp_runtime(
+    lambda: app_context.mcp_token_service,
+    lambda: app_context.terminology_service,
+    mcp_settings,
+)
 
 
 async def health_check(request: Request) -> JSONResponse:
@@ -520,7 +543,9 @@ async def lifespan(app: Starlette):
         logger.error(f"Failed to start application: {e}", exc_info=True)
         raise
     
-    yield
+    async with mcp_runtime.lifespan():
+        logger.info("MCP Streamable HTTP endpoint: /api/mcp")
+        yield
     
     # Shutdown
     logger.info("Shutting down Doc Translation Backend API...")
@@ -549,6 +574,8 @@ class CustomGraphQL(GraphQL):
             # Expose services directly for user resolvers
             "user_service": resolver_context.user_service,
             "auth_service": resolver_context.auth_service,
+            "mcp_token_service": app_context.mcp_token_service,
+            "response": response,
         }
 
 
@@ -562,6 +589,8 @@ graphql_app = CustomGraphQL(
 # Define API routes with /api prefix for easier deployment
 api_routes = [
     Route("/health", health_check),
+    # A Route (not Mount) preserves the canonical URL without a slash redirect.
+    Route("/mcp", mcp_runtime.app),
     Route("/upload", upload_file, methods=["POST"]),
     Route("/download", download_file),
     Mount("/graphql", graphql_app),
@@ -582,6 +611,9 @@ cors_origins = [
 ]
 if frontend_url not in cors_origins:
     cors_origins.append(frontend_url)
+for origin in mcp_settings.allowed_origins:
+    if origin not in cors_origins:
+        cors_origins.append(origin)
 
 logger.info(f"CORS allowed origins: {cors_origins}")
 
@@ -620,8 +652,11 @@ middleware = [
         allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization"],
-        expose_headers=["Content-Disposition"],
+        allow_headers=[
+            "Content-Type", "Authorization", "MCP-Protocol-Version",
+            "Mcp-Session-Id", "Last-Event-ID",
+        ],
+        expose_headers=["Content-Disposition", "Mcp-Session-Id"],
     ),
 ]
 

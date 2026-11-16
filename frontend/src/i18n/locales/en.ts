@@ -1,4 +1,42 @@
 export default {
+  mcpTokens: {
+    "title": "MCP Tokens",
+    "scope": "Tokens can read all existing and future terminology catalogs.",
+    "refresh": "Refresh",
+    "create": "Create token",
+    "empty": "No MCP tokens",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}",
+    "name": "Name",
+    "id": "Token ID",
+    "createdBy": "Created by",
+    "createdAt": "Created at",
+    "expiresAt": "Expires at",
+    "status": "Status",
+    "actions": "Actions",
+    "active": "Active",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "revoke": "Revoke",
+    "validity": "Validity",
+    "days": "{days} days",
+    "custom": "Custom date",
+    "secretTitle": "Copy your token",
+    "secretWarning": "This token is shown only once. Copy it now; you cannot view it again after closing.",
+    "endpoint": "MCP endpoint",
+    "copy": "Copy token",
+    "close": "Close",
+    "revokeWarning": "Revocation is permanent. Clients using this token will lose access. Create a new token to restore access.",
+    "loadError": "Unable to load tokens.",
+    "createError": "Unable to create token. If the response was lost, refresh the list and revoke the new token before creating another.",
+    "nameRequired": "Enter a name (1–100 characters).",
+    "expiryRequired": "Choose a future expiry date.",
+    "copied": "Token copied",
+    "copyError": "Copy failed. Select and copy the token manually.",
+    "revokeError": "Unable to revoke token.",
+    "revokedSuccess": "Token revoked"
+},
   // Application
   app: {
     title: 'Doc Translation'
@@ -6,7 +44,9 @@ export default {
 
   // Navigation
   nav: {
-    main: 'Home',
+    mcpTokens: "MCP Tokens",
+    main: 'Translation',
+    dashboard: 'Dashboard',
     settings: 'Settings',
     thesaurus: 'Thesaurus',
     users: 'User Management',
@@ -50,12 +90,27 @@ export default {
 
   // Main Page - Translation
   translation: {
-    title: 'Translation Dashboard',
+    title: 'Translation',
     subtitle: 'Upload your documents and translate them instantly.',
     start: 'Start Translation',
     actionDescription: 'Ready to translate? Click below to start the process.',
     validationUpload: 'Please upload at least one file',
     validationLanguage: 'Please select a language pair'
+  },
+
+  // Dashboard Page
+  dashboard: {
+    title: 'Dashboard',
+    subtitle: 'View your translation statistics and thesaurus overview.',
+    translatedDocs: 'Translated Documents',
+    translatedDocsDesc: 'Number of successfully translated files',
+    termPairs: 'Total Term Pairs',
+    termPairsDesc: 'Configured source and target translation terms',
+    translatedItems: 'Translated Paragraphs/Cells',
+    translatedItemsDesc: 'Total translated segments across all documents',
+    termCatalogs: 'Term Catalogs',
+    termCatalogsDesc: 'Number of directories organizing term pairs',
+    noData: 'No statistics available yet'
   },
 
   // Job
@@ -101,6 +156,7 @@ export default {
 
   // Settings Page
   settings: {
+    translationTab: 'Translation settings',
     subtitle: 'Manage translation models and language configurations.',
     languagePairs: 'Language Pair Management',
     addLanguagePair: 'Add Language Pair',

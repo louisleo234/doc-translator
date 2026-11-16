@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # required for OIDC
+  id-token: write
   contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,53 +32,55 @@ jobs:
           cd ecs
           npm ci
 
-      - name: Notify WeChat - deploy started
+      - name: Preserve MCP configuration
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
-          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"content\": \"## 🚀 开始部署\n\n**项目**: sgp-doc-translation\n**触发**: ${{ github.event_name }}\n**Commit**: \`${{ github.sha }}\`\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n> 部署进行中，请稍候...\"
-              }
-            }"
+          SERVICE_ARN=$(aws cloudformation describe-stack-resource --stack-name DocTranslationStack --logical-resource-id BackendService7A4224EE --query 'StackResourceDetail.PhysicalResourceId' --output text)
+          TASK_ARN=$(aws ecs describe-services --cluster doc-translation-cluster --services "$SERVICE_ARN" --query 'services[0].taskDefinition' --output text)
+          ENVIRONMENT=$(aws ecs describe-task-definition --task-definition "$TASK_ARN" --query 'taskDefinition.containerDefinitions[].environment[]' --output json)
+          HOSTS=$(jq -r '[.[] | select(.name == "MCP_ALLOWED_HOSTS") | .value] | first // empty' <<< "$ENVIRONMENT")
+          ORIGINS=$(jq -r '[.[] | select(.name == "MCP_ALLOWED_ORIGINS") | .value] | first // empty' <<< "$ENVIRONMENT")
+          CURRENT_JWT=$(jq -r '[.[] | select(.name == "JWT_SECRET") | .value] | first // empty' <<< "$ENVIRONMENT")
+          if [[ -z "$HOSTS" || -z "$ORIGINS" || -z "$CURRENT_JWT" || "$CURRENT_JWT" != "$JWT_SECRET" || "$HOSTS" == *$'\n'* || "$ORIGINS" == *$'\n'* ]]; then
+            echo 'Current MCP configuration or JWT secret does not match; deployment stopped.' >&2
+            exit 1
+          fi
+          printf 'MCP_ALLOWED_HOSTS=%s\nMCP_ALLOWED_ORIGINS=%s\n' "$HOSTS" "$ORIGINS" >> "$GITHUB_ENV"
 
       - name: CDK Deploy
-        id: deploy
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          CPU_ARCH: x64
+          S3_BUCKET: ${{ vars.S3_BUCKET }}
+          DEPLOY_REGION: ${{ vars.AWS_REGION }}
+          ENABLE_INTERNAL_ALB: 'true'
+          VPC_CIDR: ${{ vars.VPC_CIDR }}
+          INTERNAL_ALB_SOURCE_CIDR: ${{ vars.INTERNAL_ALB_SOURCE_CIDR }}
         run: |
           cd ecs
-          npx cdk deploy \
-            -c s3Bucket=${{ vars.S3_BUCKET }} \
-            -c "jwtSecret=${{ secrets.JWT_SECRET }}" \
-            -c region=${{ vars.AWS_REGION }} \
-            -c enableInternalAlb=true \
-            -c vpcCidr=${{ vars.VPC_CIDR }} \
-            -c "internalAlbSourceCidr=${{ vars.INTERNAL_ALB_SOURCE_CIDR }}" \
-            --require-approval never \
-            --outputs-file cdk-outputs.json 2>&1 | tee deploy_output.txt
-          echo "exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+          npx cdk deploy -c "region=$DEPLOY_REGION" --require-approval never
 
-      - name: Notify WeChat - deploy success
-        if: steps.deploy.outputs.exit_code == '0'
+  notify-result:
+    needs: deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send deployment result
+        env:
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
         run: |
-          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"content\": \"## ✅ 部署成功\n\n**项目**: sgp-doc-translation\n**Commit**: \`$(echo '${{ github.sha }}' | cut -c1-7)\`\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n**访问地址**:\n- 公网: http://${{ vars.PUBLIC_ALB_DNS }}\n- 内网: http://${{ vars.INTERNAL_ALB_DNS }}\n\n> [查看部署详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
-              }
-            }"
-
-      - name: Notify WeChat - deploy failed
-        if: steps.deploy.outputs.exit_code != '0'
-        run: |
-          curl -s -X POST "${{ secrets.WECHAT_WEBHOOK_URL }}" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"content\": \"## ❌ 部署失败\n\n**项目**: sgp-doc-translation\n**Commit**: \`$(echo '${{ github.sha }}' | cut -c1-7)\`\n**时间**: $(date '+%Y-%m-%d %H:%M') UTC\n\n> [查看错误日志](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"
-              }
-            }"
-          exit 1
+          if [[ "$DEPLOY_RESULT" == success ]]; then
+            TITLE='✅ 部署成功'
+          else
+            TITLE='❌ 部署失败或未完成'
+          fi
+          RUN_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          PAYLOAD=$(jq -n --arg title "$TITLE" --arg sha "${GITHUB_SHA:0:7}" --arg url "$RUN_URL" '{msgtype:"markdown",markdown:{content:("## " + $title + "\n\n**项目**: sgp-doc-translation\n**Commit**: `" + $sha + "`\n\n> [查看部署详情](" + $url + ")")}}')
+          RESPONSE=$(curl --silent --show-error --fail --max-time 20 -H 'Content-Type: application/json' -d "$PAYLOAD" "$WECHAT_WEBHOOK_URL")
+          if ! jq -e '.errcode == 0' >/dev/null <<< "$RESPONSE"; then
+            echo 'WeCom rejected the deployment notification.' >&2
+            exit 1
+          fi
+          echo 'WeCom accepted the deployment notification.'

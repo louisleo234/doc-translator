@@ -32,6 +32,8 @@ class TestAppConfigFromEnv:
         monkeypatch.delenv("MAX_CONCURRENT_FILES", raising=False)
         monkeypatch.delenv("TRANSLATION_BATCH_SIZE", raising=False)
         monkeypatch.delenv("MAX_FILE_SIZE", raising=False)
+        monkeypatch.delenv("MAX_TERM_LENGTH", raising=False)
+        monkeypatch.delenv("MAX_TERMS_FOR_TRANSLATION", raising=False)
 
         from src.core.app_config import AppConfig
 
@@ -41,7 +43,9 @@ class TestAppConfigFromEnv:
         assert config.s3_bucket == "test-bucket"
         assert config.max_concurrent_files == 5
         assert config.translation_batch_size == 20
-        assert config.max_file_size == 52428800
+        assert config.max_file_size == 209715200
+        assert config.max_term_length == 500
+        assert config.max_terms_for_translation == 5000
 
     def test_from_env_accepts_custom_values(self, monkeypatch):
         """Test that custom env values are used."""
@@ -50,6 +54,8 @@ class TestAppConfigFromEnv:
         monkeypatch.setenv("MAX_CONCURRENT_FILES", "10")
         monkeypatch.setenv("TRANSLATION_BATCH_SIZE", "20")
         monkeypatch.setenv("MAX_FILE_SIZE", "104857600")
+        monkeypatch.setenv("MAX_TERM_LENGTH", "600")
+        monkeypatch.setenv("MAX_TERMS_FOR_TRANSLATION", "8000")
 
         from src.core.app_config import AppConfig
 
@@ -60,6 +66,8 @@ class TestAppConfigFromEnv:
         assert config.max_concurrent_files == 10
         assert config.translation_batch_size == 20
         assert config.max_file_size == 104857600
+        assert config.max_term_length == 600
+        assert config.max_terms_for_translation == 8000
 
     def test_from_env_validates_positive_integers(self, monkeypatch):
         """Test that invalid integer values raise ConfigurationError."""

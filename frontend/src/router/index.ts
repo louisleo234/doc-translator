@@ -14,6 +14,12 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
+    path: '/dashboard',
+    name: 'Dashboard',
+    component: () => import('@/views/DashboardPage.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/main',
     name: 'Main',
     component: () => import('@/views/MainPage.vue'),
@@ -36,6 +42,11 @@ const routes: RouteRecordRaw[] = [
     name: 'UserManagement',
     component: () => import('@/views/UserManagement.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
+  },
+  {
+    path: '/mcp-tokens',
+    name: 'McpTokenManagement',
+    redirect: { path: '/settings', query: { tab: 'mcp-tokens' } },
   },
   {
     path: '/change-password',
@@ -61,7 +72,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   // Load auth from localStorage if not already loaded
-  if (!authStore.isAuthenticated && !authStore.isLoading) {
+  if (!authStore.isAuthenticated || !authStore.user) {
     const token = localStorage.getItem('auth_token')
     if (token) {
       // Try to restore session

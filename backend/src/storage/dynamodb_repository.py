@@ -1113,7 +1113,9 @@ class DynamoDBRepository:
         """
         return await self._run_sync(self._create_user, user_data)
     
-    def _get_user(self, username: str) -> Optional[Dict[str, Any]]:
+    def _get_user(
+        self, username: str, consistent_read: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Get a user by username.
         
@@ -1126,10 +1128,15 @@ class DynamoDBRepository:
         resource = self._get_resource()
         table = resource.Table(self.USERS_TABLE)
         
-        response = table.get_item(Key={"username": username})
+        options: Dict[str, Any] = {"Key": {"username": username}}
+        if consistent_read:
+            options["ConsistentRead"] = True
+        response = table.get_item(**options)
         return response.get("Item")
     
-    async def get_user(self, username: str) -> Optional[Dict[str, Any]]:
+    async def get_user(
+        self, username: str, *, consistent_read: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Async get a user by username.
         
@@ -1139,6 +1146,8 @@ class DynamoDBRepository:
         Returns:
             User data if found, None otherwise.
         """
+        if consistent_read:
+            return await self._run_sync(self._get_user, username, True)
         return await self._run_sync(self._get_user, username)
     
     def _get_users(self, include_deleted: bool = False) -> List[Dict[str, Any]]:

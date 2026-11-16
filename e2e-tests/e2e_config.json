@@ -35,7 +35,7 @@
     "translation_job": 120,
     "file_upload": 30,
     "download": 15,
-    "polling_interval": 2
+    "polling_interval": 0.2
   },
   "test_files": {
     "simple_chinese": {

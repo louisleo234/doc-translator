@@ -40,6 +40,10 @@ async def create_tables_command() -> int:
         logger.info("Configuration tables created successfully!")
         await repo.initialize_users_table()
         logger.info("Users table created successfully!")
+        from src.storage.mcp_token_repository import McpTokenRepository
+
+        await McpTokenRepository(repo).initialize_table()
+        logger.info("MCP token table created successfully!")
         return 0
     except Exception as e:
         logger.error(f"Failed to create tables: {e}")
@@ -65,14 +69,22 @@ async def create_admin_command(username: str, password: str) -> int:
     try:
         repo = get_repository()
 
+        # Hash password
+        password_hash = PasswordService.hash_password(password)
+
         # Check if user already exists
         existing = await repo.get_user(username)
         if existing:
-            logger.info(f"Admin user '{username}' already exists")
+            logger.info(f"Admin user '{username}' already exists. Updating password and resetting account status...")
+            await repo.update_user(
+                username,
+                password_hash=password_hash,
+                status="active",
+                must_change_password=False,
+                failed_login_count=0
+            )
+            logger.info(f"Admin user '{username}' updated successfully!")
             return 0
-
-        # Hash password
-        password_hash = PasswordService.hash_password(password)
 
         # Create user item
         now = datetime.now(timezone.utc)
@@ -80,8 +92,8 @@ async def create_admin_command(username: str, password: str) -> int:
             'username': username,
             'password_hash': password_hash,
             'role': 'admin',
-            'status': 'pending_password',
-            'must_change_password': True,
+            'status': 'active',
+            'must_change_password': False,
             'failed_login_count': 0,
             'created_at': now.isoformat(),
             'updated_at': now.isoformat(),
@@ -89,8 +101,6 @@ async def create_admin_command(username: str, password: str) -> int:
 
         await repo.create_user(user_item)
         logger.info(f"Admin user '{username}' created successfully!")
-        logger.warning(f"Initial password is set - user must change on first login")
-
         return 0
 
     except Exception as e:

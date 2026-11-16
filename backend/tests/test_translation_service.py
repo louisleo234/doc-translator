@@ -320,6 +320,18 @@ class TestTranslationServiceInitialization:
 
         assert service.model_id == 'custom-model-id'
 
+    def test_initialization_with_decimal_params(self, mock_bedrock_client):
+        """Test service handles Decimal types gracefully by casting them to int."""
+        from decimal import Decimal
+        service = TranslationService(
+            batch_size=Decimal('25'),
+            max_batch_concurrency=Decimal('4')
+        )
+        assert isinstance(service.batch_size, int)
+        assert service.batch_size == 25
+        assert isinstance(service.max_batch_concurrency, int)
+        assert service.max_batch_concurrency == 4
+
 
 class TestTranslationFunctionality:
     """Tests for translation functionality."""

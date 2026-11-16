@@ -10,7 +10,6 @@ help:
 	@echo ""
 	@echo "Available targets:"
 	@echo "  install      - Install test dependencies"
-	@echo "  install-all  - Install with browser automation deps"
 	@echo "  validate     - Validate test environment"
 	@echo "  test-api     - Run API-only tests"
 	@echo "  test-chrome  - Run Chrome DevTools MCP tests"
@@ -26,12 +25,6 @@ help:
 install:
 	@echo "📦 Installing E2E test dependencies..."
 	uv sync
-	@echo "✅ Dependencies installed"
-
-# Install with browser automation dependencies
-install-all:
-	@echo "📦 Installing E2E test dependencies with browser support..."
-	uv sync --extra browser
 	@echo "✅ Dependencies installed"
 
 # Validate test environment

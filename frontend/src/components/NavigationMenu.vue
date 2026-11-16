@@ -13,9 +13,15 @@
         class="nav-menu desktop-menu"
         @select="handleMenuSelect"
       >
+        <a-menu-item key="/dashboard">
+          <template #icon>
+            <DashboardOutlined />
+          </template>
+          {{ t('nav.dashboard', 'Dashboard') }}
+        </a-menu-item>
         <a-menu-item key="/main">
           <template #icon>
-            <HomeOutlined />
+            <TranslationOutlined />
           </template>
           {{ t('nav.main') }}
         </a-menu-item>
@@ -106,9 +112,15 @@
           class="mobile-nav-menu"
           @select="handleMobileMenuSelect"
         >
+          <a-menu-item key="/dashboard">
+            <template #icon>
+              <DashboardOutlined />
+            </template>
+            {{ t('nav.dashboard', 'Dashboard') }}
+          </a-menu-item>
           <a-menu-item key="/main">
             <template #icon>
-              <HomeOutlined />
+              <TranslationOutlined />
             </template>
             {{ t('nav.main') }}
           </a-menu-item>
@@ -153,7 +165,6 @@ import { useLanguage } from '@/composables/useLanguage'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import ThemeSwitcher from './ThemeSwitcher.vue'
 import {
-  HomeOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
@@ -161,6 +172,8 @@ import {
   MenuOutlined,
   BookOutlined,
   TeamOutlined,
+  DashboardOutlined,
+  TranslationOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -178,6 +191,8 @@ const showMobileMenu = ref(false)
 // Computed drawer title based on current route
 const drawerTitle = computed(() => {
   switch (route.path) {
+    case '/dashboard':
+      return t('nav.dashboard')
     case '/settings':
       return t('nav.settings')
     case '/main':

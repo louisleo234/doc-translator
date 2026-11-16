@@ -44,7 +44,7 @@ class E2ETestRunner:
         
         # Check backend
         try:
-            response = requests.get(f"{self.backend_url}/health", timeout=5)
+            response = requests.get(f"{self.backend_url}/api/health", timeout=5)
             services["backend"] = response.status_code == 200
             if services["backend"]:
                 print(f"  ✅ Backend service: {self.backend_url}")

@@ -153,6 +153,15 @@ class JobStore:
         user_id = self._require_user_context()
         return await self._repository.delete_job(user_id, job_id)
 
+    async def scan_all_jobs(self) -> List[TranslationJob]:
+        """
+        Scan all jobs across all users (admin only).
+
+        Returns:
+            List of all translation jobs in the system.
+        """
+        return await self._repository.scan_all_jobs()
+
     async def clear(self) -> None:
         """
         Clear all jobs from the store.

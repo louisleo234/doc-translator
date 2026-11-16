@@ -428,141 +428,84 @@ class TestE2EChrome:
     
     @pytest.mark.e2e
     @pytest.mark.browser
-    def test_complete_user_workflow(self):
-        """
-        Test the complete user workflow: login → upload → translate → download
+    def test_complete_user_workflow_browser(self):
+        """Test the complete user workflow in Chrome via native CDP."""
+        import asyncio
+        from e2e_chrome_runner import ChromeE2ERunner
         
-        Note: This test requires Chrome DevTools MCP to be configured.
-        When MCP is not available, it falls back to API testing.
-        """
-        print("Testing complete user workflow via API...")
+        runner = ChromeE2ERunner()
+        asyncio.run(runner.setup_test_environment())
+        try:
+            asyncio.run(runner.test_complete_user_workflow())
+            result = runner.test_results.get("complete_user_workflow", {})
+            assert result.get("status") == "PASSED", f"Browser test failed: {result.get('message')}"
+        finally:
+            asyncio.run(runner.cleanup_test_environment())
+
+    @pytest.mark.e2e
+    @pytest.mark.browser
+    def test_language_pair_management_browser(self):
+        """Test language pair addition, verification, and deletion via native CDP."""
+        import asyncio
+        from e2e_chrome_runner import ChromeE2ERunner
         
-        # Step 1: Authenticate
-        self.auth_token = authenticate_graphql()
-        print("✓ Step 1: Authentication successful")
+        runner = ChromeE2ERunner()
+        asyncio.run(runner.setup_test_environment())
+        try:
+            asyncio.run(runner.test_language_pair_management())
+            result = runner.test_results.get("language_pair_management", {})
+            assert result.get("status") == "PASSED", f"Browser test failed: {result.get('message')}"
+        finally:
+            asyncio.run(runner.cleanup_test_environment())
+
+    @pytest.mark.e2e
+    @pytest.mark.browser
+    def test_error_scenarios_browser(self):
+        """Test validation and authentication error handling via native CDP."""
+        import asyncio
+        from e2e_chrome_runner import ChromeE2ERunner
         
-        # Step 2: Get language pairs
-        query = CONFIG["graphql_operations"]["get_language_pairs"]
-        response = requests.post(
-            GRAPHQL_ENDPOINT,
-            json={"query": query},
-            headers={
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-        )
-        
-        data = response.json()
-        language_pairs = data["data"]["languagePairs"]
-        zh_vi_pair = next(
-            (p for p in language_pairs if p["sourceLanguageCode"] == "zh" and p["targetLanguageCode"] == "vi"),
-            None
-        )
-        assert zh_vi_pair, "Chinese-Vietnamese pair not found"
-        print(f"✓ Step 2: Language pair found: {zh_vi_pair['id']}")
-        
-        # Step 3: Upload file
-        test_file = self.test_files[0]
-        with open(test_file, 'rb') as f:
-            files = {'file': (test_file.name, f, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}
-            response = requests.post(
-                UPLOAD_ENDPOINT,
-                files=files,
-                headers={"Authorization": f"Bearer {self.auth_token}"}
-            )
-        
-        assert response.status_code == 200
-        file_data = response.json()
-        file_id = file_data["id"]
-        print(f"✓ Step 3: File uploaded: {file_data['filename']}")
-        
-        # Step 4: Create translation job
-        create_job_mutation = CONFIG["graphql_operations"]["create_translation_job"]
-        
-        response = requests.post(
-            GRAPHQL_ENDPOINT,
-            json={
-                "query": create_job_mutation,
-                "variables": {
-                    "fileIds": [file_id],
-                    "languagePairId": zh_vi_pair["id"]
-                }
-            },
-            headers={
-                "Authorization": f"Bearer {self.auth_token}",
-                "Content-Type": "application/json"
-            }
-        )
-        
-        assert response.status_code == 200
-        data = response.json()
-        assert "errors" not in data, f"Job creation failed: {data.get('errors')}"
-        
-        job = data["data"]["createTranslationJob"]
-        job_id = job["id"]
-        print(f"✓ Step 4: Translation job created: {job_id}")
-        
-        # Step 5: Poll for job completion (with timeout)
-        get_job_query = CONFIG["graphql_operations"]["get_job"]
-        max_wait = TIMEOUTS["translation_job"]
-        poll_interval = TIMEOUTS["polling_interval"]
-        start_time = time.time()
-        
-        while time.time() - start_time < max_wait:
-            response = requests.post(
-                GRAPHQL_ENDPOINT,
-                json={"query": get_job_query, "variables": {"id": job_id}},
-                headers={
-                    "Authorization": f"Bearer {self.auth_token}",
-                    "Content-Type": "application/json"
-                }
-            )
-            
-            data = response.json()
-            job_status = data["data"]["job"]
-            
-            if job_status["status"] in ["COMPLETED", "PARTIAL_SUCCESS"]:
-                print(f"✓ Step 5: Job completed with status: {job_status['status']}")
-                print(f"  Progress: {job_status['progress'] * 100:.1f}%")
-                print(f"  Files completed: {job_status['filesCompleted']}/{job_status['filesTotal']}")
-                break
-            elif job_status["status"] == "FAILED":
-                pytest.fail(f"Translation job failed: {job_status.get('filesFailed', [])}")
-            
-            print(f"  Polling... Status: {job_status['status']}, Progress: {job_status['progress'] * 100:.1f}%")
-            time.sleep(poll_interval)
-        else:
-            pytest.fail(f"Job did not complete within {max_wait} seconds")
-        
-        print("✓ Complete user workflow test passed")
-    
+        runner = ChromeE2ERunner()
+        asyncio.run(runner.setup_test_environment())
+        try:
+            asyncio.run(runner.test_error_scenarios())
+            result = runner.test_results.get("error_scenarios", {})
+            assert result.get("status") == "PASSED", f"Browser test failed: {result.get('message')}"
+        finally:
+            asyncio.run(runner.cleanup_test_environment())
+
     @pytest.mark.e2e
     @pytest.mark.browser
     def test_responsive_design_viewports(self):
-        """
-        Test responsive design at different viewports.
+        """Test page responsiveness at mobile, tablet, and desktop viewports via native CDP."""
+        import asyncio
+        from e2e_chrome_runner import ChromeE2ERunner
         
-        Note: This test documents expected behavior for browser testing.
-        Actual viewport testing requires Chrome DevTools MCP.
-        """
-        print("Testing responsive design expectations...")
+        runner = ChromeE2ERunner()
+        asyncio.run(runner.setup_test_environment())
+        try:
+            asyncio.run(runner.test_responsive_design())
+            result = runner.test_results.get("responsive_design", {})
+            assert result.get("status") == "PASSED", f"Browser test failed: {result.get('message')}"
+        finally:
+            asyncio.run(runner.cleanup_test_environment())
+
+    @pytest.mark.e2e
+    @pytest.mark.browser
+    def test_real_time_progress_browser(self):
+        """Test real-time translation progress updates in the UI via native CDP."""
+        import asyncio
+        from e2e_chrome_runner import ChromeE2ERunner
         
-        for viewport_name, dimensions in VIEWPORTS.items():
-            width = dimensions["width"]
-            height = dimensions["height"]
-            description = dimensions.get("description", "")
-            
-            if width < 768:
-                expected_layout = "mobile"
-                print(f"  ✓ {viewport_name} ({description}): Expected mobile layout with stacked components")
-            elif width < 1024:
-                expected_layout = "tablet"
-                print(f"  ✓ {viewport_name} ({description}): Expected tablet layout with optimized spacing")
-            else:
-                expected_layout = "desktop"
-                print(f"  ✓ {viewport_name} ({description}): Expected desktop layout with full features")
-        
-        print("✓ Responsive design expectations documented")
+        runner = ChromeE2ERunner()
+        asyncio.run(runner.setup_test_environment())
+        try:
+            asyncio.run(runner.test_real_time_progress())
+            result = runner.test_results.get("real_time_progress", {})
+            assert result.get("status") == "PASSED", f"Browser test failed: {result.get('message')}"
+        finally:
+            asyncio.run(runner.cleanup_test_environment())
+
 
 
 @pytest.fixture(scope="session", autouse=True)

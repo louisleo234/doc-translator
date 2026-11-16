@@ -81,7 +81,7 @@ onMounted(() => {
 }
 
 /* Remove default padding for pages that handle their own layout */
-.app-content :deep(.ant-layout-content) {
+.app-content .ant-layout-content {
   padding: 0;
 }
 
