@@ -20,6 +20,31 @@ function step(job: Job | undefined, name: string): string {
 }
 
 describe('deployment workflow', () => {
+  it('uses the dedicated upstream credential only for fetching the private upstream', () => {
+    const command = step(workflow('check-upstream.yml')['check-upstream'], 'Add upstream remote');
+    const dir = mkdtempSync(join(tmpdir(), 'workflow-fetch-test-'));
+    try {
+      const header = Buffer.from('x-access-token:test-upstream-token').toString('base64');
+      const fakeGit = `#!/bin/bash
+if [[ "$1" == remote ]]; then exit 0; fi
+if [[ "$1 $2 $3" == 'fetch upstream main' ]]; then
+  [[ "$GIT_CONFIG_COUNT" == 2 && "$GIT_CONFIG_KEY_0" == 'http.https://github.com/.extraheader' && -z "$GIT_CONFIG_VALUE_0" && "$GIT_CONFIG_KEY_1" == 'http.https://github.com/.extraheader' && "$GIT_CONFIG_VALUE_1" == 'AUTHORIZATION: basic ${header}' ]]
+  exit $?
+fi
+exit 1
+`;
+      writeFileSync(join(dir, 'git'), fakeGit, { mode: 0o700 });
+      const env = { ...process.env, PATH: `${dir}:${process.env.PATH}`, UPSTREAM_READ_TOKEN: 'test-upstream-token' };
+      const good = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], { env, encoding: 'utf8' });
+      expect(good.status).toBe(0);
+      expect(good.stdout + good.stderr).not.toContain('test-upstream-token');
+      const missing = spawnSync('bash', ['-e', '-o', 'pipefail', '-c', command], { env: { ...env, UPSTREAM_READ_TOKEN: '' }, encoding: 'utf8' });
+      expect(missing.status).not.toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('creates a unique sync branch without deleting an existing branch', () => {
     const command = step(workflow('check-upstream.yml')['check-upstream'], 'Prepare sync branch');
     const dir = mkdtempSync(join(tmpdir(), 'workflow-git-test-'));

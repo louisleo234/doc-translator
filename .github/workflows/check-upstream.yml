@@ -23,8 +23,20 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Add upstream remote
+        env:
+          UPSTREAM_READ_TOKEN: ${{ secrets.UPSTREAM_READ_TOKEN }}
         run: |
+          if [[ -z "$UPSTREAM_READ_TOKEN" ]]; then
+            echo 'Missing read-only credential for the private upstream repository.' >&2
+            exit 1
+          fi
           git remote add upstream https://github.com/freewine/doc-translator.git
+          UPSTREAM_AUTH=$(printf 'x-access-token:%s' "$UPSTREAM_READ_TOKEN" | base64 | tr -d '\n')
+          GIT_CONFIG_COUNT=2 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0= \
+          GIT_CONFIG_KEY_1=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_1="AUTHORIZATION: basic $UPSTREAM_AUTH" \
           git fetch upstream main
 
       - name: Check for new commits
