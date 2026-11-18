@@ -128,7 +128,7 @@ async def test_job_uses_user_preferred_model(
     mock_translation_orchestrator,
 ):
     """A job created by a user with a custom default_model_id uses that model."""
-    custom_model_id = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    custom_model_id = "global.zai.glm-5.3"
 
     mock_user_settings_service.get_user_settings = AsyncMock(
         return_value=UserSettings(

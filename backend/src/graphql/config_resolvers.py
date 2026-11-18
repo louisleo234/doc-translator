@@ -5,7 +5,7 @@ This module provides GraphQL types and resolvers for:
 - Language pair management (user-level)
 - User settings management
 - Global configuration access
-- Available models query
+- Available models query and admin model management
 """
 import logging
 from typing import List, Optional
@@ -23,7 +23,8 @@ from ..services.language_pair_service import LanguagePairService
 from ..services.user_settings_service import UserSettingsService
 from .resolvers import require_auth, AuthenticationError, ValidationError
 from .decorators import (
-    get_current_user_from_context,
+    AuthenticationError as TokenAuthenticationError,
+    verify_and_get_user,
     PermissionError as AuthPermissionError,
 )
 from ..models.user import UserRole
@@ -91,7 +92,7 @@ class ConfigModelInfo:
     Attributes:
         model_id: Model ID (e.g., "global.amazon.nova-2-lite-v1:0")
         display_name: Display name (e.g., "Nova 2 Lite")
-        provider: Provider name (e.g., "amazon", "anthropic")
+        provider: Provider name (e.g., "amazon", "xai")
         is_default: Whether this is the system default model
     """
     model_id: str
@@ -165,6 +166,17 @@ def get_config_services(info: Info) -> tuple:
     global_config_service = getattr(context, 'global_config_service', None)
     
     return language_pair_service, user_settings_service, global_config_service
+
+
+async def _require_admin(info: Info) -> str:
+    """Require an authenticated admin user (role loaded from the user store)."""
+    try:
+        user = await verify_and_get_user(info)
+    except TokenAuthenticationError as e:
+        raise AuthenticationError(str(e)) from e
+    if user.role != UserRole.ADMIN:
+        raise AuthPermissionError("Admin access required")
+    return user.username
 
 
 # =============================================================================
@@ -261,12 +273,8 @@ async def resolve_create_config_language_pair(
     Returns:
         Created ConfigLanguagePair
     """
-    username = require_auth(info)
-    
     # Admin role check - only admins can create language pairs
-    user = get_current_user_from_context(info)
-    if not user or user.role != UserRole.ADMIN:
-        raise AuthPermissionError("Admin access required")
+    username = await _require_admin(info)
     
     language_pair_service, _, _ = get_config_services(info)
     
@@ -305,12 +313,8 @@ async def resolve_update_config_language_pair(
     Returns:
         Updated ConfigLanguagePair or None if not found
     """
-    username = require_auth(info)
-    
     # Admin role check - only admins can update language pairs
-    user = get_current_user_from_context(info)
-    if not user or user.role != UserRole.ADMIN:
-        raise AuthPermissionError("Admin access required")
+    username = await _require_admin(info)
     
     language_pair_service, _, _ = get_config_services(info)
     
@@ -346,12 +350,8 @@ async def resolve_delete_config_language_pair(
     Returns:
         True if deleted, False if not found
     """
-    username = require_auth(info)
-    
     # Admin role check - only admins can delete language pairs
-    user = get_current_user_from_context(info)
-    if not user or user.role != UserRole.ADMIN:
-        raise AuthPermissionError("Admin access required")
+    username = await _require_admin(info)
     
     language_pair_service, _, _ = get_config_services(info)
     
@@ -423,3 +423,65 @@ async def resolve_reset_config_user_settings(info: Info) -> ConfigUserSettings:
     settings = await user_settings_service.reset_user_settings(username)
     logger.info(f"Reset settings for user {username}")
     return convert_user_settings(settings)
+
+
+# =============================================================================
+# Model Management Mutations (admin only)
+# =============================================================================
+
+def _require_global_config_service(info: Info) -> GlobalConfigService:
+    _, _, global_config_service = get_config_services(info)
+    if not global_config_service:
+        raise RuntimeError("GlobalConfigService is required but not available")
+    return global_config_service
+
+
+async def resolve_create_config_model(
+    info: Info,
+    model_id: str,
+    display_name: str,
+    provider: Optional[str] = None,
+    is_default: bool = False,
+) -> ConfigModelInfo:
+    """Add a model to the available model list (admin only)."""
+    username = await _require_admin(info)
+    service = _require_global_config_service(info)
+    try:
+        model = await service.add_model(model_id, display_name, provider, is_default)
+    except ValueError as e:
+        raise ValidationError(str(e))
+    logger.info(f"Created model {model.model_id} by admin {username}")
+    return convert_model_config(model)
+
+
+async def resolve_update_config_model(
+    info: Info,
+    model_id: str,
+    display_name: Optional[str] = None,
+    provider: Optional[str] = None,
+    is_default: Optional[bool] = None,
+) -> Optional[ConfigModelInfo]:
+    """Update a model in the available model list (admin only)."""
+    username = await _require_admin(info)
+    service = _require_global_config_service(info)
+    try:
+        model = await service.update_model(model_id, display_name, provider, is_default)
+    except ValueError as e:
+        raise ValidationError(str(e))
+    if model is None:
+        return None
+    logger.info(f"Updated model {model_id} by admin {username}")
+    return convert_model_config(model)
+
+
+async def resolve_delete_config_model(info: Info, model_id: str) -> bool:
+    """Delete a model from the available model list (admin only)."""
+    username = await _require_admin(info)
+    service = _require_global_config_service(info)
+    try:
+        deleted = await service.delete_model(model_id)
+    except ValueError as e:
+        raise ValidationError(str(e))
+    if deleted:
+        logger.info(f"Deleted model {model_id} by admin {username}")
+    return deleted

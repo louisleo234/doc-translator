@@ -24,6 +24,7 @@ from .decorators import (
 )
 from ..models.user import UserRole
 from ..services.auth_service import AuthService
+from ..services.global_config_service import pick_default_model_id
 from ..services.job_manager import JobManager
 from ..services.translation_orchestrator import TranslationOrchestrator
 from ..storage.s3_file_storage import S3FileStorage
@@ -462,6 +463,9 @@ async def resolve_model_config(info: Info) -> GQLModelConfig:
     # Get user's saved model preference (falls back to system default if not set)
     user_settings = await context.user_settings_service.get_user_settings(username)
     model_id = user_settings.default_model_id
+    # The saved model may have been removed by an admin; show the system default
+    if available_models and not any(m.model_id == model_id for m in available_models):
+        model_id = pick_default_model_id(available_models)
 
     # Find the model's name
     model_name = "Unknown"

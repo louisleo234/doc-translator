@@ -355,17 +355,17 @@ class TestModelConfig:
     def test_model_config_from_dict(self):
         """Test creating model config from dictionary."""
         data = {
-            "model_id": "anthropic.claude-3-sonnet",
-            "display_name": "Claude 3 Sonnet",
-            "provider": "anthropic",
+            "model_id": "global.xai.grok-4.7",
+            "display_name": "Grok 4.7",
+            "provider": "xai",
             "is_default": False,
         }
         
         model = ModelConfig.from_dict(data)
         
-        assert model.model_id == "anthropic.claude-3-sonnet"
-        assert model.display_name == "Claude 3 Sonnet"
-        assert model.provider == "anthropic"
+        assert model.model_id == "global.xai.grok-4.7"
+        assert model.display_name == "Grok 4.7"
+        assert model.provider == "xai"
 
 
 class TestEnums:

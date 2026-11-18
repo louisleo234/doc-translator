@@ -194,6 +194,37 @@ export default {
     updateModelError: 'Failed to update model'
   },
 
+  modelManagement: {
+    tab: 'Model management',
+    title: 'Translation models',
+    description: 'Models users can pick for translation. The default model is used for new users and when a saved model is removed.',
+    refresh: 'Refresh',
+    add: 'Add model',
+    edit: 'Edit model',
+    empty: 'No models configured',
+    default: 'Default',
+    setDefault: 'Set default',
+    confirmDelete: 'Delete model "{name}"?',
+    cannotDeleteDefault: 'Set another model as default before deleting this one',
+    modelId: 'Model ID',
+    modelIdHint: 'Bedrock model ID or inference profile ID, e.g. global.xai.grok-4.7',
+    modelIdImmutable: 'The model ID cannot be changed. Delete and re-add the model instead.',
+    displayName: 'Display name',
+    provider: 'Provider',
+    providerHint: 'Optional. Inferred from the model ID when empty.',
+    makeDefault: 'Make this the default model',
+    modelIdRequired: 'Model ID is required',
+    modelIdFormat: 'Model ID may only contain letters, digits and . _ : / -',
+    displayNameRequired: 'Display name is required',
+    saved: 'Model saved',
+    defaultSet: '{name} is now the default model',
+    deleted: 'Model deleted',
+    loadError: 'Failed to load models',
+    saveError: 'Failed to save model',
+    deleteError: 'Failed to delete model',
+    notFound: 'Model not found'
+  },
+
   // Validation
   validation: {
     required: 'This field is required',

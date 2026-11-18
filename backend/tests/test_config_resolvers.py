@@ -275,10 +275,9 @@ class TestMutationResolvers:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": admin_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="testuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=admin_user)):
             result = await resolve_create_config_language_pair(
                 mock_info,
                 source_language="zh",
@@ -309,10 +308,9 @@ class TestMutationResolvers:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": admin_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="testuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=admin_user)):
             with pytest.raises(Exception) as exc_info:
                 await resolve_create_config_language_pair(
                     mock_info,
@@ -344,10 +342,9 @@ class TestMutationResolvers:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": admin_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="testuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=admin_user)):
             result = await resolve_update_config_language_pair(
                 mock_info,
                 language_pair_id="lp-123",
@@ -372,10 +369,9 @@ class TestMutationResolvers:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": admin_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="testuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=admin_user)):
             result = await resolve_update_config_language_pair(
                 mock_info,
                 language_pair_id="nonexistent",
@@ -394,10 +390,9 @@ class TestMutationResolvers:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": admin_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="testuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=admin_user)):
             result = await resolve_delete_config_language_pair(mock_info, "lp-123")
         
         assert result is True
@@ -500,10 +495,9 @@ class TestAdminPermissions:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": regular_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="regularuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=regular_user)):
             with pytest.raises(AuthPermissionError, match="Admin access required"):
                 await resolve_create_config_language_pair(
                     mock_info,
@@ -522,10 +516,9 @@ class TestAdminPermissions:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": regular_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="regularuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=regular_user)):
             with pytest.raises(AuthPermissionError, match="Admin access required"):
                 await resolve_update_config_language_pair(
                     mock_info,
@@ -542,10 +535,9 @@ class TestAdminPermissions:
         mock_info.context = {
             "resolver_context": mock_resolver_context,
             "request": MagicMock(headers={"Authorization": "Bearer valid_token"}),
-            "current_user": regular_user,
         }
         
-        with patch('src.graphql.config_resolvers.require_auth', return_value="regularuser"):
+        with patch('src.graphql.config_resolvers.verify_and_get_user', AsyncMock(return_value=regular_user)):
             with pytest.raises(AuthPermissionError, match="Admin access required"):
                 await resolve_delete_config_language_pair(mock_info, "lp-123")
 
@@ -578,3 +570,19 @@ class TestAuthentication:
             await resolve_create_config_language_pair(
                 mock_info, "zh", "vi", "Test", True
             )
+
+
+class TestAdminCheckUsesUserStore:
+    """Regression: admin check must not rely on a pre-populated current_user."""
+
+    @pytest.mark.asyncio
+    async def test_admin_allowed_without_current_user_in_context(
+        self, mock_info, mock_resolver_context, admin_user
+    ):
+        mock_resolver_context.language_pair_service.delete_language_pair.return_value = True
+        mock_info.context = {"resolver_context": mock_resolver_context}
+
+        verify = AsyncMock(return_value=admin_user)
+        with patch('src.graphql.config_resolvers.verify_and_get_user', verify):
+            assert await resolve_delete_config_language_pair(mock_info, "lp-123") is True
+        verify.assert_awaited_once_with(mock_info)

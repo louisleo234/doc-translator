@@ -10,7 +10,7 @@ Deploy the Doc Translation System to Amazon ECS Fargate using AWS CDK.
 4. AWS CDK CLI (`npm install -g aws-cdk`)
 5. AWS IAM user/role with permissions for ECS, ECR, VPC, ELB, IAM, CloudFormation, DynamoDB, S3, Bedrock
 6. S3 bucket created for file storage
-7. Bedrock model access enabled in your AWS account (Nova 2 Lite, Claude Sonnet/Haiku)
+7. Bedrock model access enabled in your AWS account (Nova 2 Lite, Grok 4.7, GLM 5.3, Kimi K3.1)
 
 ## Architecture
 
