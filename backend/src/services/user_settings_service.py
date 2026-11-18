@@ -58,9 +58,9 @@ class UserSettingsService:
             UserSettings object.
         """
         data = await self.repository.get_user_settings(user_id)
-        
+
         if data:
-            return UserSettings.from_dict(data)
+            return await self._resolve_model(UserSettings.from_dict(data))
         
         # Initialize from global defaults
         self._logger.info(f"Initializing settings for user {user_id}")
@@ -102,6 +102,7 @@ class UserSettingsService:
             if not is_valid:
                 raise ValueError(f"Invalid model ID: {default_model_id}")
             updates["default_model_id"] = default_model_id
+            updates["model_explicit"] = True
         
         if ui_language is not None:
             # Validate UI language
@@ -131,7 +132,7 @@ class UserSettingsService:
         
         if data:
             self._logger.info(f"Updated settings for user {user_id}")
-            return UserSettings.from_dict(data)
+            return await self._resolve_model(UserSettings.from_dict(data))
         
         # Should not happen since we ensured settings exist
         return current
@@ -178,16 +179,29 @@ class UserSettingsService:
         # Get global defaults
         defaults = await self.global_config_service.get_default_settings()
         
-        # Create user settings
+        # Create user settings. The model is not pinned: the user follows the
+        # system default until they pick a model themselves.
         data = await self.repository.create_user_settings({
             "user_id": user_id,
-            "default_model_id": defaults.get("default_model_id", "global.amazon.nova-2-lite-v1:0"),
+            "default_model_id": defaults.get(
+                "default_model_id", "global.amazon.nova-2-lite-v1:0"
+            ),
             "ui_language": defaults.get("ui_language", "zh"),
             "translation_batch_size": defaults.get("translation_batch_size", 10),
             "max_concurrent_tasks": defaults.get("max_concurrent_tasks", 3),
+            "model_explicit": False,
         })
-        
+
         return UserSettings.from_dict(data)
+
+    async def _resolve_model(self, settings: UserSettings) -> UserSettings:
+        """Replace the stored model with the current system default if the
+        user has not picked one explicitly."""
+        if not settings.model_explicit:
+            settings.default_model_id = (
+                await self.global_config_service.get_default_model_id()
+            )
+        return settings
 
 
 # Import for type hints (avoid circular import)

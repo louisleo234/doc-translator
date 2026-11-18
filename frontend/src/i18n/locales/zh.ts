@@ -194,6 +194,37 @@ export default {
     updateModelError: '更新模型失败'
   },
 
+  modelManagement: {
+    tab: '模型管理',
+    title: '翻译模型',
+    description: '用户可选择的翻译模型。新用户使用默认模型；用户已保存的模型被删除后也会回退到默认模型。',
+    refresh: '刷新',
+    add: '添加模型',
+    edit: '编辑模型',
+    empty: '暂无模型',
+    default: '默认',
+    setDefault: '设为默认',
+    confirmDelete: '确定删除模型“{name}”？',
+    cannotDeleteDefault: '请先将其他模型设为默认，再删除此模型',
+    modelId: '模型 ID',
+    modelIdHint: 'Bedrock 模型 ID 或推理配置文件 ID，例如 global.xai.grok-4.7',
+    modelIdImmutable: '模型 ID 不可修改，如需更改请删除后重新添加。',
+    displayName: '显示名称',
+    provider: '提供商',
+    providerHint: '可选，留空时根据模型 ID 自动推断。',
+    makeDefault: '设为默认模型',
+    modelIdRequired: '请输入模型 ID',
+    modelIdFormat: '模型 ID 只能包含字母、数字和 . _ : / -',
+    displayNameRequired: '请输入显示名称',
+    saved: '模型已保存',
+    defaultSet: '已将 {name} 设为默认模型',
+    deleted: '模型已删除',
+    loadError: '加载模型列表失败',
+    saveError: '保存模型失败',
+    deleteError: '删除模型失败',
+    notFound: '模型不存在'
+  },
+
   // Validation
   validation: {
     required: '此字段为必填项',

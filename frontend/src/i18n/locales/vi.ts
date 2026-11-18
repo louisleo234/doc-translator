@@ -194,6 +194,37 @@ export default {
     updateModelError: 'Cập nhật mô hình thất bại'
   },
 
+  modelManagement: {
+    tab: 'Quản lý mô hình',
+    title: 'Mô hình dịch',
+    description: 'Các mô hình người dùng có thể chọn để dịch. Mô hình mặc định được dùng cho người dùng mới và khi mô hình đã lưu bị xóa.',
+    refresh: 'Làm mới',
+    add: 'Thêm mô hình',
+    edit: 'Sửa mô hình',
+    empty: 'Chưa có mô hình nào',
+    default: 'Mặc định',
+    setDefault: 'Đặt mặc định',
+    confirmDelete: 'Xóa mô hình "{name}"?',
+    cannotDeleteDefault: 'Hãy đặt mô hình khác làm mặc định trước khi xóa mô hình này',
+    modelId: 'ID mô hình',
+    modelIdHint: 'ID mô hình Bedrock hoặc ID inference profile, ví dụ global.xai.grok-4.7',
+    modelIdImmutable: 'Không thể đổi ID mô hình. Hãy xóa và thêm lại.',
+    displayName: 'Tên hiển thị',
+    provider: 'Nhà cung cấp',
+    providerHint: 'Tùy chọn. Để trống sẽ tự suy ra từ ID mô hình.',
+    makeDefault: 'Đặt làm mô hình mặc định',
+    modelIdRequired: 'Vui lòng nhập ID mô hình',
+    modelIdFormat: 'ID mô hình chỉ được chứa chữ, số và . _ : / -',
+    displayNameRequired: 'Vui lòng nhập tên hiển thị',
+    saved: 'Đã lưu mô hình',
+    defaultSet: '{name} đã là mô hình mặc định',
+    deleted: 'Đã xóa mô hình',
+    loadError: 'Tải danh sách mô hình thất bại',
+    saveError: 'Lưu mô hình thất bại',
+    deleteError: 'Xóa mô hình thất bại',
+    notFound: 'Không tìm thấy mô hình'
+  },
+
   // Validation
   validation: {
     required: 'Trường này là bắt buộc',

@@ -30,6 +30,9 @@ def mock_global_config_service():
         "max_concurrent_tasks": 3,
     })
     service.is_model_valid = AsyncMock(return_value=True)
+    service.get_default_model_id = AsyncMock(
+        return_value="global.amazon.nova-2-lite-v1:0"
+    )
     return service
 
 

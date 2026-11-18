@@ -171,6 +171,9 @@
         </a-col>
       </a-row>
         </a-tab-pane>
+        <a-tab-pane v-if="canEdit" key="models" :tab="t('modelManagement.tab')">
+          <ModelManagement v-if="activeTab === 'models'" @changed="loadModelConfig" />
+        </a-tab-pane>
         <a-tab-pane v-if="canEdit" key="mcp-tokens" :tab="t('nav.mcpTokens')">
           <McpTokenManagement v-if="activeTab === 'mcp-tokens'" />
         </a-tab-pane>
@@ -210,16 +213,19 @@ const { t } = useLanguage()
 const route = useRoute()
 const router = useRouter()
 const McpTokenManagement = defineAsyncComponent(() => import('./McpTokenManagement.vue'))
+const ModelManagement = defineAsyncComponent(() => import('./ModelManagement.vue'))
 
 // Admin-only editing
 const canEdit = computed(() => authStore.isAdmin)
-const activeTab = computed(() =>
-  canEdit.value && route.query.tab === 'mcp-tokens' ? 'mcp-tokens' : 'translation'
-)
+const ADMIN_TABS = ['models', 'mcp-tokens']
+const activeTab = computed(() => {
+  const tab = route.query.tab
+  return canEdit.value && typeof tab === 'string' && ADMIN_TABS.includes(tab) ? tab : 'translation'
+})
 
 function changeTab(key: string | number) {
   const query = { ...route.query }
-  if (key === 'mcp-tokens' && canEdit.value) query.tab = 'mcp-tokens'
+  if (canEdit.value && ADMIN_TABS.includes(String(key))) query.tab = String(key)
   else delete query.tab
   router.replace({ path: '/settings', query })
 }

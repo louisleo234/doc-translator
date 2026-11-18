@@ -13,6 +13,11 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 
+# Model that was copied into every user's settings before users could
+# follow the system default (see UserSettings.model_explicit).
+LEGACY_DEFAULT_MODEL_ID = "global.amazon.nova-2-lite-v1:0"
+
+
 class UILanguage(str, Enum):
     """Supported UI languages."""
     CHINESE = "zh"
@@ -129,6 +134,8 @@ class UserSettings:
         ui_language: Interface language ("zh", "vi", "en")
         translation_batch_size: Translation batch size (1-100)
         max_concurrent_tasks: Maximum concurrent tasks (1-10)
+        model_explicit: True if the user picked default_model_id themselves;
+            False means the user follows the system default model
         created_at: Creation timestamp
         updated_at: Last modification timestamp
     """
@@ -137,6 +144,7 @@ class UserSettings:
     ui_language: str = "zh"
     translation_batch_size: int = 10
     max_concurrent_tasks: int = 3
+    model_explicit: bool = True
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     
@@ -148,6 +156,7 @@ class UserSettings:
             "ui_language": self.ui_language,
             "translation_batch_size": self.translation_batch_size,
             "max_concurrent_tasks": self.max_concurrent_tasks,
+            "model_explicit": self.model_explicit,
             "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             "updated_at": self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
         }
@@ -163,12 +172,20 @@ class UserSettings:
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         
+        model_explicit = data.get("model_explicit")
+        if model_explicit is None:
+            # Records created before the flag existed: the seeded default was
+            # copied into every user's settings, so treat that value as
+            # "follow the system default" and anything else as a user choice.
+            model_explicit = data["default_model_id"] != LEGACY_DEFAULT_MODEL_ID
+
         return cls(
             user_id=data["user_id"],
             default_model_id=data["default_model_id"],
             ui_language=data.get("ui_language", "zh"),
             translation_batch_size=int(data.get("translation_batch_size", 10)),
             max_concurrent_tasks=int(data.get("max_concurrent_tasks", 3)),
+            model_explicit=bool(model_explicit),
             created_at=created_at or datetime.now(timezone.utc),
             updated_at=updated_at or datetime.now(timezone.utc),
         )
@@ -249,7 +266,7 @@ class ModelConfig:
     Attributes:
         model_id: Model ID (e.g., "global.amazon.nova-2-lite-v1:0")
         display_name: Display name (e.g., "Nova Pro")
-        provider: Provider name (e.g., "amazon", "anthropic")
+        provider: Provider name (e.g., "amazon", "xai")
         is_default: Whether this is the system default model
     """
     model_id: str

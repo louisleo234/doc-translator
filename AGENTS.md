@@ -132,8 +132,9 @@ On first run, the backend auto-creates a default admin user if none exists. A ra
 | Model | ID |
 |-------|-----|
 | Nova 2 Lite (default) | `global.amazon.nova-2-lite-v1:0` |
-| Claude Sonnet 4.5 | `global.anthropic.claude-sonnet-4-5-20250929-v1:0` |
-| Claude Haiku 4.5 | `global.anthropic.claude-haiku-4-5-20251001-v1:0` |
+| Grok 4.7 | `global.xai.grok-4.7` |
+| GLM 5.3 | `global.zai.glm-5.3` |
+| Kimi K3.1 | `global.moonshotai.kimi-k3.1` |
 
 ## AWS Services
 

@@ -63,7 +63,7 @@ See [ecs/README.md](ecs/README.md) for AWS ECS deployment instructions.
 Vue 3 Frontend  -->  GraphQL API (Strawberry)  -->  Amazon Bedrock
      |                      |                            |
   Ant Design           Starlette/Uvicorn          LLM Translation
-  Apollo Client        Document Processors        (Nova, Claude)
+  Apollo Client        Document Processors        (Nova, Grok, GLM, Kimi)
                        DynamoDB Storage
 ```
 
@@ -81,7 +81,7 @@ Vue 3 Frontend  -->  GraphQL API (Strawberry)  -->  Amazon Bedrock
 ### Supported Models
 
 - Nova 2 Lite
-- Claude Sonnet 4.5, Claude Haiku 4.5
+- Grok 4.7, GLM 5.3, Kimi K3.1
 
 ## AWS Services
 

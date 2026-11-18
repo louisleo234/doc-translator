@@ -18,6 +18,10 @@ from src.models.user import UserStatus
 logger = logging.getLogger(__name__)
 
 
+class VersionConflictError(Exception):
+    """Raised when a versioned write loses an optimistic-locking race."""
+
+
 # Table names
 TERM_PAIRS_TABLE = "doc_translation_term_pairs"
 CATALOGS_TABLE = "doc_translation_catalogs"
@@ -1803,6 +1807,7 @@ class DynamoDBRepository:
             "ui_language": settings.get("ui_language", "zh"),
             "translation_batch_size": settings.get("translation_batch_size", 10),
             "max_concurrent_tasks": settings.get("max_concurrent_tasks", 3),
+            "model_explicit": settings.get("model_explicit", False),
             "created_at": settings.get("created_at") or now,
             "updated_at": now,
         }
@@ -2051,6 +2056,89 @@ class DynamoDBRepository:
         except ClientError:
             return False
     
+    def _put_global_config_versioned(
+        self,
+        config_key: str,
+        config_value: Dict[str, Any],
+        expected_version: Optional[int],
+        description: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Write a global config only if its version still matches.
+
+        Args:
+            config_key: Configuration key.
+            config_value: New configuration value.
+            expected_version: Version read before modifying. None means the
+                item did not exist or predates versioning.
+            description: Description used when the item is created.
+
+        Returns:
+            The stored item, with version incremented.
+
+        Raises:
+            VersionConflictError: If another writer changed the item first.
+        """
+        resource = self._get_resource()
+        table = resource.Table(self.GLOBAL_CONFIG_TABLE)
+        now = datetime.now(timezone.utc).isoformat()
+        new_version = (expected_version or 0) + 1
+
+        if expected_version is None:
+            condition = "attribute_not_exists(#version)"
+            values: Dict[str, Any] = {}
+        else:
+            condition = "#version = :expected"
+            values = {":expected": expected_version}
+
+        try:
+            response = table.update_item(
+                Key={"config_key": config_key},
+                UpdateExpression=(
+                    "SET #value = :value, #version = :new_version, "
+                    "#updated_at = :now, "
+                    "#created_at = if_not_exists(#created_at, :now), "
+                    "#description = if_not_exists(#description, :description)"
+                ),
+                ConditionExpression=condition,
+                ExpressionAttributeNames={
+                    "#value": "config_value",
+                    "#version": "version",
+                    "#updated_at": "updated_at",
+                    "#created_at": "created_at",
+                    "#description": "description",
+                },
+                ExpressionAttributeValues={
+                    **values,
+                    ":value": config_value,
+                    ":new_version": new_version,
+                    ":now": now,
+                    ":description": description,
+                },
+                ReturnValues="ALL_NEW",
+            )
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                raise VersionConflictError(config_key) from e
+            raise
+        return response["Attributes"]
+
+    async def put_global_config_versioned(
+        self,
+        config_key: str,
+        config_value: Dict[str, Any],
+        expected_version: Optional[int],
+        description: str = "",
+    ) -> Dict[str, Any]:
+        """Async optimistic-locking write of a global configuration."""
+        return await self._run_sync(
+            self._put_global_config_versioned,
+            config_key,
+            config_value,
+            expected_version,
+            description,
+        )
+
     async def delete_global_config(self, config_key: str) -> bool:
         """Async delete a global configuration."""
         return await self._run_sync(self._delete_global_config, config_key)

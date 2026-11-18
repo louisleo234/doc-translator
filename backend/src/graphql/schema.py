@@ -1314,6 +1314,63 @@ class Mutation:
         return await resolve_delete_config_language_pair(info, language_pair_id)
     
     @strawberry.mutation
+    async def create_config_model(
+        self,
+        info: Info,
+        model_id: str,
+        display_name: str,
+        provider: Optional[str] = None,
+        is_default: bool = False,
+    ) -> "ConfigModelInfo":
+        """
+        Add a translation model (admin only).
+
+        Args:
+            model_id: Bedrock model ID or inference profile ID
+            display_name: Name shown in the UI
+            provider: Provider name; inferred from model_id when omitted
+            is_default: Make this the system default model
+
+        Returns:
+            Created model
+        """
+        from .config_resolvers import resolve_create_config_model
+        return await resolve_create_config_model(
+            info, model_id, display_name, provider, is_default
+        )
+
+    @strawberry.mutation
+    async def update_config_model(
+        self,
+        info: Info,
+        model_id: str,
+        display_name: Optional[str] = None,
+        provider: Optional[str] = None,
+        is_default: Optional[bool] = None,
+    ) -> Optional["ConfigModelInfo"]:
+        """
+        Update a translation model (admin only). The model ID is immutable.
+
+        Returns:
+            Updated model or None if not found
+        """
+        from .config_resolvers import resolve_update_config_model
+        return await resolve_update_config_model(
+            info, model_id, display_name, provider, is_default
+        )
+
+    @strawberry.mutation
+    async def delete_config_model(self, info: Info, model_id: str) -> bool:
+        """
+        Delete a translation model (admin only).
+
+        Returns:
+            True if deleted, False if not found
+        """
+        from .config_resolvers import resolve_delete_config_model
+        return await resolve_delete_config_model(info, model_id)
+
+    @strawberry.mutation
     async def update_config_user_settings(
         self,
         info: Info,

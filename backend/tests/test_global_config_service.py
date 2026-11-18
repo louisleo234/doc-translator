@@ -68,9 +68,9 @@ class TestGetAvailableModels:
                         "is_default": True,
                     },
                     {
-                        "model_id": "anthropic.claude-3-sonnet",
-                        "display_name": "Claude 3 Sonnet",
-                        "provider": "anthropic",
+                        "model_id": "global.xai.grok-4.7",
+                        "display_name": "Grok 4.7",
+                        "provider": "xai",
                         "is_default": False,
                     },
                 ]
@@ -279,14 +279,14 @@ class TestEnsureDefaultsExist:
         service = GlobalConfigService(repository=mock_repository)
         await service.ensure_defaults_exist()
 
-        # Should create 4 default configs
-        assert mock_repository.create_global_config.call_count == 4
+        # Should create 3 default configs
+        assert mock_repository.create_global_config.call_count == 3
 
         # Verify keys were created
         calls = mock_repository.create_global_config.call_args_list
         config_keys = [call[0][0]["config_key"] for call in calls]
         assert "AVAILABLE_MODELS" in config_keys
-        assert "DEFAULT_MODEL_ID" in config_keys
+        assert "DEFAULT_MODEL_ID" not in config_keys
         assert "DEFAULT_LANGUAGE_PAIRS" in config_keys
         assert "DEFAULT_SETTINGS" in config_keys
 
